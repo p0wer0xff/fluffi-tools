@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../fluffi5"
+		},
+		{
+			"path": "../fluffi6"
+		},
+		{
+			"path": "../fluffi7"
+		},
+		{
+			"path": "../fluffi8"
+		}
+	],
+	"settings": {}
+}
