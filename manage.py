@@ -178,11 +178,11 @@ def manage_agents():
     while True:
         try:
             r = s.get(f"{PM_URL}/project/1/history/{history_id}")
+            if r.json()["status"] == "OK":
+                break
         except:
             time.sleep(0.5)
             continue
-        if r.json()["status"] == "OK":
-            break
         time.sleep(0.5)
     print("Manage agents success")
 
