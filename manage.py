@@ -190,8 +190,9 @@ def manage_agents():
 def down(n):
     print(f"Stopping 1021-{n}...")
 
-    # Init string
+    # Init strings
     worker_name = f"{WORKER_NAME_PREFIX}{n}{WORKER_NAME_SUFFIX}"
+    ssh_server = f"{SSH_SERVER_PREFIX}{n}"
 
     # Create session
     s = requests.Session()
@@ -275,6 +276,20 @@ def down(n):
                 break
             time.sleep(0.25)
         print("Archive success")
+
+    # Delete log and testcase directories
+    print("Deleting log/testcase directories...")
+    subprocess.run(
+        [
+            "ssh",
+            f"{ssh_server}",
+            "rm -rf /home/fluffi_linux_user/fluffi/persistent/x64/logs /home/fluffi_linux_user/fluffi/persistent/x64/testcaseFiles",
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    print("Log/testcase directories deleted")
 
     print(f"1021-{n} stopped")
 
