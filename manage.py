@@ -11,18 +11,13 @@ import util
 # Constants
 N_MIN = 5
 N_MAX = 8
-SSH_SERVER_PREFIX = "worker"
+SSH_SERVER_PREFIX = util.SSH_SERVER_PREFIX
 WORKER_NAME_PREFIX = "fluffi-1021-"
 WORKER_NAME_SUFFIX = "-Linux1"
 FLUFFI_PATH_PREFIX = "/home/sears/fluffi"
 GIT_URL = "https://github.com/sears-s/fluffi"
 FUZZGOAT_PATH = "/home/sears/fluffi-tools/fuzzgoat"
 ARCH = "x64"
-PROXY_PORT = 8888
-PROXIES = {
-    "http": f"socks5h://127.0.0.1:{PROXY_PORT}",
-    "https": f"socks5h://127.0.0.1:{PROXY_PORT}",
-}
 FLUFFI_URL = "http://web.fluffi:8880"
 PM_URL = "http://pole.fluffi:8888/api/v2"
 FUZZJOB_ID_REGEX = r'"/projects/archive/(\d+)"'
@@ -59,23 +54,23 @@ def main():
     elif args.command == "up":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                start_proxy(i)
+                util.start_proxy(i)
                 up(i)
-                stop_proxy()
+                util.stop_proxy(i)
         else:
-            start_proxy(args.n)
+            util.start_proxy(args.n)
             up(args.n)
-            stop_proxy()
+            util.stop_proxy(args.n)
     elif args.command == "down":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                start_proxy(i)
+                util.start_proxy(i)
                 down(i)
-                stop_proxy()
+                util.stop_proxy(i)
         else:
-            start_proxy(args.n)
+            util.start_proxy(args.n)
             down(args.n)
-            stop_proxy()
+            util.stop_proxy(args.n)
     elif args.command == "deploy":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
@@ -85,17 +80,17 @@ def main():
     elif args.command == "all":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                start_proxy(i)
+                util.start_proxy(i)
                 down(i)
                 deploy(i)
                 up(i)
-                stop_proxy()
+                util.stop_proxy(i)
         else:
-            start_proxy(args.n)
+            util.start_proxy(args.n)
             down(args.n)
             deploy(args.n)
             up(args.n)
-            stop_proxy()
+            util.stop_proxy(args.n)
     else:
         log.error("Invalid command")
         exit(1)
@@ -139,32 +134,8 @@ def clone(n):
     log.info(f"1021-{n} cloned")
 
 
-def stop_proxy():
-    subprocess.run(
-        f"lsof -ti tcp:{PROXY_PORT} | xargs kill",
-        shell=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    log.debug("Stopped proxy")
-
-
-def start_proxy(n):
-    stop_proxy()
-    subprocess.run(
-        f"ssh {SSH_SERVER_PREFIX}{n} -D {PROXY_PORT} -N &",
-        check=True,
-        shell=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    time.sleep(0.5)
-    log.debug("Started proxy")
-
-
-def manage_agents():
-    s = util.FaultTolerantSession()
-    s.proxies.update(PROXIES)
+def manage_agents(n):
+    s = util.FaultTolerantSession(n)
     s.auth = ("admin", "admin")
     log.debug("Starting manage agents task...")
     r = s.post(f"{PM_URL}/project/1/periodic_task/3/execute/")
@@ -186,8 +157,7 @@ def down(n):
     ssh_server = f"{SSH_SERVER_PREFIX}{n}"
 
     # Create session
-    s = util.FaultTolerantSession()
-    s.proxies.update(PROXIES)
+    s = util.FaultTolerantSession(n)
 
     # Get fuzzjob ID
     r = s.get(f"{FLUFFI_URL}/projects")
@@ -219,9 +189,9 @@ def down(n):
         )
         if "Success!" not in r.text:
             log.error(f"Error downturning GRE: {r.text}")
-            stop_proxy()
+            util.stop_proxy(n)
             exit(1)
-        manage_agents()
+        manage_agents(n)
         log.debug("GRE downturned")
 
     # Downturn LM
@@ -235,9 +205,9 @@ def down(n):
     )
     if "Success!" not in r.text:
         log.error(f"Error downturning LM: {r.text}")
-        stop_proxy()
+        util.stop_proxy(n)
         exit(1)
-    manage_agents()
+    manage_agents(n)
     log.debug("LM downturned")
 
     # Kill the leftovers
@@ -245,7 +215,7 @@ def down(n):
     subprocess.run(
         [
             "ssh",
-            f"{SSH_SERVER_PREFIX}{n}",
+            f"{ssh_server}{n}",
             f"pkill -f '/home/fluffi_linux_user/fluffi/persistent/{ARCH}/'",
         ],
         stdout=subprocess.DEVNULL,
@@ -350,8 +320,7 @@ def up(n):
     worker_name = f"{WORKER_NAME_PREFIX}{n}{WORKER_NAME_SUFFIX}"
 
     # Create session
-    s = util.FaultTolerantSession()
-    s.proxies.update(PROXIES)
+    s = util.FaultTolerantSession(n)
 
     # Create new fuzzjob
     log.debug("Creating new fuzzjob...")
@@ -388,7 +357,7 @@ def up(n):
     )
     if "Success" not in r.text:
         log.error(f"Error creating new fuzzjob: {r.text}")
-        stop_proxy()
+        util.stop_proxy(n)
         exit(1)
     log.debug("Fuzzjob created")
 
@@ -411,9 +380,9 @@ def up(n):
     )
     if "Success!" not in r.text:
         log.error(f"Error upturning LM: {r.text}")
-        stop_proxy()
+        util.stop_proxy(n)
         exit(1)
-    manage_agents()
+    manage_agents(n)
     log.debug("LM upturned")
 
     # Upturn GRE
@@ -431,9 +400,9 @@ def up(n):
     )
     if "Success!" not in r.text:
         log.error(f"Error upturning GRE: {r.text}")
-        stop_proxy()
+        util.stop_proxy(n)
         exit(1)
-    manage_agents()
+    manage_agents(n)
     log.debug("GRE upturned")
 
     log.info(f"1021-{n} started")
