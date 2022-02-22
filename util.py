@@ -18,6 +18,9 @@ class FaultTolerantSession(requests.Session):
     def __init__(self, n, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Set n
+        self.n = n
+
         # Use SSH proxy server
         port = PROXY_PORT_BASE + n
         proxies = {
