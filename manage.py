@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import re
 import subprocess
 import time
@@ -28,8 +29,15 @@ FUZZJOB_ID_REGEX = r'"/projects/archive/(\d+)"'
 FUZZJOB_NAME_REGEX = r"<h1>([a-zA-Z0-9]+)</h1>"
 FUZZJOB_NAME_PREFIX = "sears"
 
+# Get logger
+log = logging.getLogger("fluffi-tools")
+
 
 def main():
+    # Setup logging
+    log.setLevel(logging.DEBUG)
+    logging.basicConfig(format="%(levelname)s:%(message)s")
+
     # Create parser
     parser = argparse.ArgumentParser()
     parser.add_argument("command", type=str, help="clone, up, down, deploy, or all")
@@ -38,7 +46,7 @@ def main():
 
     # Check host
     if args.n and (args.n < N_MIN or args.n > N_MAX):
-        print("Invalid host")
+        log.error("Invalid host")
         exit(1)
 
     # Process command
@@ -89,12 +97,12 @@ def main():
             up(args.n)
             stop_proxy()
     else:
-        print("Invalid command")
+        log.error("Invalid command")
         exit(1)
 
 
 def clone(n):
-    print(f"Cloning 1021-{n}...")
+    log.info(f"Cloning 1021-{n}...")
 
     # Init string
     fluffi_path = f"{FLUFFI_PATH_PREFIX}{n}"
@@ -128,7 +136,7 @@ def clone(n):
         check=True,
     )
 
-    print(f"1021-{n} cloned")
+    log.info(f"1021-{n} cloned")
 
 
 def stop_proxy():
@@ -138,7 +146,7 @@ def stop_proxy():
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    print("Stopped proxy")
+    log.debug("Stopped proxy")
 
 
 def start_proxy(n):
@@ -151,14 +159,14 @@ def start_proxy(n):
         stderr=subprocess.DEVNULL,
     )
     time.sleep(0.5)
-    print("Started proxy")
+    log.debug("Started proxy")
 
 
 def manage_agents():
     s = util.FaultTolerantSession()
     s.proxies.update(PROXIES)
     s.auth = ("admin", "admin")
-    print("Starting manage agents task...")
+    log.debug("Starting manage agents task...")
     r = s.post(f"{PM_URL}/project/1/periodic_task/3/execute/")
     history_id = r.json()["history_id"]
     time.sleep(1)
@@ -167,11 +175,11 @@ def manage_agents():
         if r.json()["status"] == "OK":
             break
         time.sleep(util.REQ_SLEEP_TIME)
-    print("Manage agents success")
+    log.debug("Manage agents success")
 
 
 def down(n):
-    print(f"Stopping 1021-{n}...")
+    log.info(f"Stopping 1021-{n}...")
 
     # Init strings
     worker_name = f"{WORKER_NAME_PREFIX}{n}{WORKER_NAME_SUFFIX}"
@@ -187,17 +195,17 @@ def down(n):
         fuzzjob_id = int(re.search(FUZZJOB_ID_REGEX, r.text).group(1))
     except:
         fuzzjob_id = -1  # no current fuzzjob
-    print(f"Fuzzjob ID: {fuzzjob_id}")
+    log.debug(f"Fuzzjob ID: {fuzzjob_id}")
 
     # Get fuzzjob name
     if fuzzjob_id != -1:
         r = s.get(f"{FLUFFI_URL}/projects/view/{fuzzjob_id}")
         fuzzjob_name = re.search(FUZZJOB_NAME_REGEX, r.text).group(1)
-        print(f"Fuzzjob name: {fuzzjob_name}")
+        log.debug(f"Fuzzjob name: {fuzzjob_name}")
 
     # Downturn GRE
     if fuzzjob_id != -1:
-        print("Downturning GRE...")
+        log.debug("Downturning GRE...")
         r = s.post(
             f"{FLUFFI_URL}/systems/configureFuzzjobInstances/{fuzzjob_name}",
             files={
@@ -210,15 +218,14 @@ def down(n):
             },
         )
         if "Success!" not in r.text:
-            print("Error downturning GRE")
-            print(r.text)
+            log.error(f"Error downturning GRE: {r.text}")
             stop_proxy()
             exit(1)
         manage_agents()
-        print("GRE downturned")
+        log.debug("GRE downturned")
 
     # Downturn LM
-    print("Downturning LM...")
+    log.debug("Downturning LM...")
     r = s.post(
         f"{FLUFFI_URL}/systems/configureSystemInstances/{worker_name}",
         files={
@@ -227,15 +234,14 @@ def down(n):
         },
     )
     if "Success!" not in r.text:
-        print("Error downturning LM")
-        print(r.text)
+        log.error(f"Error downturning LM: {r.text}")
         stop_proxy()
         exit(1)
     manage_agents()
-    print("LM downturned")
+    log.debug("LM downturned")
 
     # Kill the leftovers
-    print("Killing leftovers...")
+    log.debug("Killing leftovers...")
     subprocess.run(
         [
             "ssh",
@@ -245,21 +251,21 @@ def down(n):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    print("Killed leftovers")
+    log.debug("Killed leftovers")
 
     # Archive fuzzjob
     if fuzzjob_id != -1:
-        print("Archiving fuzzjob...")
+        log.debug("Archiving fuzzjob...")
         s.post(f"{FLUFFI_URL}/projects/archive/{fuzzjob_id}")
         while True:
             r = s.get(f"{FLUFFI_URL}/progressArchiveFuzzjob")
             if "5/5" in r.text:
                 break
             time.sleep(util.REQ_SLEEP_TIME)
-        print("Archive success")
+        log.debug("Archive success")
 
     # Delete log and testcase directories
-    print("Deleting log/testcase directories...")
+    log.debug("Deleting log/testcase directories...")
     subprocess.run(
         [
             "ssh",
@@ -270,40 +276,41 @@ def down(n):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    print("Log/testcase directories deleted")
+    log.debug("Log/testcase directories deleted")
 
-    print(f"1021-{n} stopped")
+    log.info(f"1021-{n} stopped")
 
 
 def deploy(n):
-    print(f"Deploying 1021-{n}...")
+    log.info(f"Deploying 1021-{n}...")
 
     # Init strings
     fluffi_path = f"{FLUFFI_PATH_PREFIX}{n}"
     ssh_server = f"{SSH_SERVER_PREFIX}{n}"
 
     # Clean old build
-    print("Cleaning old build...")
+    log.debug("Cleaning old build...")
     subprocess.run(
         ["rm", "-rf", f"{fluffi_path}/core/x86-64"],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    print("Old build cleaned")
+    log.debug("Old build cleaned")
 
     # Compile new build
-    print("Compiling new build...")
+    log.debug("Compiling new build...")
     subprocess.run(
         ["sudo", "./buildAll.sh"],
         cwd=f"{fluffi_path}/build/ubuntu_based",
         check=True,
         stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
-    print("New build compiled")
+    log.debug("New build compiled")
 
     # Zip, SCP, and unzip
-    print("Transferring new build...")
+    log.debug("Transferring new build...")
     subprocess.run(
         ["zip", "-r", "fluffi.zip", "."],
         cwd=f"{fluffi_path}/core/x86-64/bin",
@@ -331,13 +338,13 @@ def deploy(n):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    print("New build transferred")
+    log.debug("New build transferred")
 
-    print(f"1021-{n} deployed")
+    log.info(f"1021-{n} deployed")
 
 
 def up(n):
-    print(f"Starting 1021-{n}...")
+    log.info(f"Starting 1021-{n}...")
 
     # Init string
     worker_name = f"{WORKER_NAME_PREFIX}{n}{WORKER_NAME_SUFFIX}"
@@ -347,7 +354,7 @@ def up(n):
     s.proxies.update(PROXIES)
 
     # Create new fuzzjob
-    print("Creating new fuzzjob...")
+    log.debug("Creating new fuzzjob...")
     r = s.post(
         f"{FLUFFI_URL}/projects/createProject",
         files=[
@@ -380,22 +387,21 @@ def up(n):
         ],
     )
     if "Success" not in r.text:
-        print("Error creating new fuzzjob")
-        print(r.text)
+        log.error(f"Error creating new fuzzjob: {r.text}")
         stop_proxy()
         exit(1)
-    print("Fuzzjob created")
+    log.debug("Fuzzjob created")
 
     # Get fuzzjob ID
     fuzzjob_id = int(r.url.split("/view/")[1])
-    print(f"Fuzzjob ID: {fuzzjob_id}")
+    log.debug(f"Fuzzjob ID: {fuzzjob_id}")
 
     # Get fuzzjob name
     fuzzjob_name = re.search(FUZZJOB_NAME_REGEX, r.text).group(1)
-    print(f"Fuzzjob name: {fuzzjob_name}")
+    log.debug(f"Fuzzjob name: {fuzzjob_name}")
 
     # Upturn LM
-    print("Upturning LM...")
+    log.debug("Upturning LM...")
     r = s.post(
         f"{FLUFFI_URL}/systems/configureSystemInstances/{worker_name}",
         files={
@@ -404,15 +410,14 @@ def up(n):
         },
     )
     if "Success!" not in r.text:
-        print("Error upturning LM")
-        print(r.text)
+        log.error(f"Error upturning LM: {r.text}")
         stop_proxy()
         exit(1)
     manage_agents()
-    print("LM upturned")
+    log.debug("LM upturned")
 
     # Upturn GRE
-    print("Upturning GRE...")
+    log.debug("Upturning GRE...")
     r = s.post(
         f"{FLUFFI_URL}/systems/configureFuzzjobInstances/{fuzzjob_name}",
         files={
@@ -425,14 +430,13 @@ def up(n):
         },
     )
     if "Success!" not in r.text:
-        print("Error upturning GRE")
-        print(r.text)
+        log.error(f"Error upturning GRE: {r.text}")
         stop_proxy()
         exit(1)
     manage_agents()
-    print("GRE upturned")
+    log.debug("GRE upturned")
 
-    print(f"1021-{n} started")
+    log.info(f"1021-{n} started")
 
 
 if __name__ == "__main__":
