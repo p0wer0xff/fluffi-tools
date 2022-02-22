@@ -5,7 +5,7 @@ import re
 import subprocess
 import time
 
-import requests
+import util
 
 # Constants
 N_MIN = 5
@@ -154,36 +154,19 @@ def start_proxy(n):
     print("Started proxy")
 
 
-# Wrapper for Fluffi requests in case of database connection failure
-def fluffi_req(s, url, files=None):
-    while True:
-        if files is None:
-            r = s.get(url)
-        else:
-            r = s.post(url, files=files)
-        if "Error: Database connection failed" in r.text:
-            time.sleep(0.25)
-            continue
-        return r
-
-
 def manage_agents():
-    s = requests.Session()
+    s = util.FaultTolerantSession()
     s.proxies.update(PROXIES)
     s.auth = ("admin", "admin")
     print("Starting manage agents task...")
     r = s.post(f"{PM_URL}/project/1/periodic_task/3/execute/")
     history_id = r.json()["history_id"]
-    time.sleep(0.5)
+    time.sleep(1)
     while True:
-        try:
-            r = s.get(f"{PM_URL}/project/1/history/{history_id}")
-            if r.json()["status"] == "OK":
-                break
-        except:
-            time.sleep(0.5)
-            continue
-        time.sleep(0.5)
+        r = s.get(f"{PM_URL}/project/1/history/{history_id}")
+        if r.json()["status"] == "OK":
+            break
+        time.sleep(util.REQ_SLEEP_TIME)
     print("Manage agents success")
 
 
@@ -195,11 +178,11 @@ def down(n):
     ssh_server = f"{SSH_SERVER_PREFIX}{n}"
 
     # Create session
-    s = requests.Session()
+    s = util.FaultTolerantSession()
     s.proxies.update(PROXIES)
 
     # Get fuzzjob ID
-    r = fluffi_req(s, f"{FLUFFI_URL}/projects")
+    r = s.get(f"{FLUFFI_URL}/projects")
     try:
         fuzzjob_id = int(re.search(FUZZJOB_ID_REGEX, r.text).group(1))
     except:
@@ -208,17 +191,16 @@ def down(n):
 
     # Get fuzzjob name
     if fuzzjob_id != -1:
-        r = fluffi_req(s, f"{FLUFFI_URL}/projects/view/{fuzzjob_id}")
+        r = s.get(f"{FLUFFI_URL}/projects/view/{fuzzjob_id}")
         fuzzjob_name = re.search(FUZZJOB_NAME_REGEX, r.text).group(1)
         print(f"Fuzzjob name: {fuzzjob_name}")
 
     # Downturn GRE
     if fuzzjob_id != -1:
         print("Downturning GRE...")
-        r = fluffi_req(
-            s,
+        r = s.post(
             f"{FLUFFI_URL}/systems/configureFuzzjobInstances/{fuzzjob_name}",
-            {
+            files={
                 f"{worker_name}_tg": (None, 0),
                 f"{worker_name}_tg_arch": (None, ARCH),
                 f"{worker_name}_tr": (None, 0),
@@ -237,10 +219,9 @@ def down(n):
 
     # Downturn LM
     print("Downturning LM...")
-    r = fluffi_req(
-        s,
+    r = s.post(
         f"{FLUFFI_URL}/systems/configureSystemInstances/{worker_name}",
-        {
+        files={
             "localManager_lm": (None, 0),
             "localManager_lm_arch": (None, ARCH),
         },
@@ -269,12 +250,12 @@ def down(n):
     # Archive fuzzjob
     if fuzzjob_id != -1:
         print("Archiving fuzzjob...")
-        fluffi_req(s, f"{FLUFFI_URL}/projects/archive/{fuzzjob_id}", {})
+        s.post(f"{FLUFFI_URL}/projects/archive/{fuzzjob_id}")
         while True:
             r = s.get(f"{FLUFFI_URL}/progressArchiveFuzzjob")
             if "5/5" in r.text:
                 break
-            time.sleep(0.25)
+            time.sleep(util.REQ_SLEEP_TIME)
         print("Archive success")
 
     # Delete log and testcase directories
@@ -318,7 +299,6 @@ def deploy(n):
         cwd=f"{fluffi_path}/build/ubuntu_based",
         check=True,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
     )
     print("New build compiled")
 
@@ -363,15 +343,14 @@ def up(n):
     worker_name = f"{WORKER_NAME_PREFIX}{n}{WORKER_NAME_SUFFIX}"
 
     # Create session
-    s = requests.Session()
+    s = util.FaultTolerantSession()
     s.proxies.update(PROXIES)
 
     # Create new fuzzjob
     print("Creating new fuzzjob...")
-    r = fluffi_req(
-        s,
+    r = s.post(
         f"{FLUFFI_URL}/projects/createProject",
-        [
+        files=[
             ("name", (None, f"{FUZZJOB_NAME_PREFIX}{int(time.time())}")),
             ("subtype", (None, "X64_Lin_DynRioSingle")),
             ("generatorTypes", (None, 100)),  # RadamsaMutator
@@ -417,10 +396,9 @@ def up(n):
 
     # Upturn LM
     print("Upturning LM...")
-    r = fluffi_req(
-        s,
+    r = s.post(
         f"{FLUFFI_URL}/systems/configureSystemInstances/{worker_name}",
-        {
+        files={
             "localManager_lm": (None, 1),
             "localManager_lm_arch": (None, ARCH),
         },
@@ -435,10 +413,9 @@ def up(n):
 
     # Upturn GRE
     print("Upturning GRE...")
-    r = fluffi_req(
-        s,
+    r = s.post(
         f"{FLUFFI_URL}/systems/configureFuzzjobInstances/{fuzzjob_name}",
-        {
+        files={
             f"{worker_name}_tg": (None, 2),
             f"{worker_name}_tg_arch": (None, ARCH),
             f"{worker_name}_tr": (None, 10),
