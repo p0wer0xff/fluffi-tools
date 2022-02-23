@@ -5,12 +5,11 @@ import logging
 import subprocess
 
 import fluffi
-import util
 
 # Constants
 N_MIN = 5
 N_MAX = 8
-SSH_SERVER_PREFIX = util.SSH_SERVER_PREFIX
+SSH_SERVER_PREFIX = "worker"
 FLUFFI_PATH_PREFIX = "/home/sears/fluffi"
 GIT_URL = "https://github.com/sears-s/fluffi"
 FUZZGOAT_PATH = "/home/sears/fluffi-tools/fuzzgoat"
@@ -47,43 +46,27 @@ def main():
     elif args.command == "up":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                util.start_proxy(i)
-                up(i)
-                util.stop_proxy(i)
+                up(fluffi.FluffiInstance(i))
         else:
-            util.start_proxy(args.n)
-            up(args.n)
-            util.stop_proxy(args.n)
+            up(fluffi.FluffiInstance(args.n))
     elif args.command == "down":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                util.start_proxy(i)
-                down(i)
-                util.stop_proxy(i)
+                down(fluffi.FluffiInstance(i))
         else:
-            util.start_proxy(args.n)
-            down(args.n)
-            util.stop_proxy(args.n)
+            down(fluffi.FluffiInstance(args.n))
     elif args.command == "deploy":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                deploy(i)
+                deploy(fluffi.FluffiInstance(i))
         else:
-            deploy(args.n)
+            deploy(fluffi.FluffiInstance(args.n))
     elif args.command == "all":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                util.start_proxy(i)
-                down(i)
-                deploy(i)
-                up(i)
-                util.stop_proxy(i)
+                all(fluffi.FluffiInstance(i))
         else:
-            util.start_proxy(args.n)
-            down(args.n)
-            deploy(args.n)
-            up(args.n)
-            util.stop_proxy(args.n)
+            all(fluffi.FluffiInstance(args.n))
     else:
         log.error("Invalid command")
         exit(1)
@@ -127,41 +110,42 @@ def clone(n):
     log.info(f"1021-{n} cloned")
 
 
-def down(n):
-    log.info(f"Stopping 1021-{n}...")
+def all(f):
+    down(f)
+    deploy(f)
+    up(f)
 
-    # Create session
-    s = util.FaultTolerantSession(n)
+
+def down(f):
+    log.info(f"Stopping 1021-{f.n}...")
 
     # Get fuzzjob name and ID
-    fuzzjob_id, fuzzjob_name = fluffi.get_fuzzjob(s)
+    fuzzjob = f.get_fuzzjob()
 
     # Downturn GRE
-    if fuzzjob_id != -1:
-        fluffi.set_gre(s, fuzzjob_name, 0, 0, 0)
+    f.set_gre(fuzzjob, 0, 0, 0)
 
     # Downturn LM
-    fluffi.set_lm(s, 0)
+    f.set_lm(0)
 
     # Kill the leftovers
-    fluffi.kill_leftover_agents(n)
+    f.kill_leftover_agents()
 
     # Archive fuzzjob
-    if fuzzjob_id != -1:
-        fluffi.archive_fuzzjob(s, fuzzjob_id)
+    f.archive_fuzzjob(fuzzjob)
 
     # Delete log and testcase directories
-    fluffi.clear_dirs(n)
+    f.clear_dirs()
 
-    log.info(f"1021-{n} stopped")
+    log.info(f"1021-{f.n} stopped")
 
 
-def deploy(n):
-    log.info(f"Deploying 1021-{n}...")
+def deploy(f):
+    log.info(f"Deploying 1021-{f.n}...")
 
     # Init strings
-    fluffi_path = f"{FLUFFI_PATH_PREFIX}{n}"
-    ssh_server = f"{SSH_SERVER_PREFIX}{n}"
+    fluffi_path = f"{FLUFFI_PATH_PREFIX}{f.n}"
+    ssh_server = f"{SSH_SERVER_PREFIX}{f.n}"
 
     # Clean old build
     log.debug("Cleaning old build...")
@@ -215,18 +199,14 @@ def deploy(n):
     )
     log.debug("New build transferred")
 
-    log.info(f"1021-{n} deployed")
+    log.info(f"1021-{f.n} deployed")
 
 
-def up(n):
-    log.info(f"Starting 1021-{n}...")
-
-    # Create session
-    s = util.FaultTolerantSession(n)
+def up(f):
+    log.info(f"Starting 1021-{f.n}...")
 
     # Create new fuzzjob
-    _, fuzzjob_name = fluffi.new_fuzzjob(
-        s,
+    fuzzjob = f.new_fuzzjob(
         FUZZJOB_NAME_PREFIX,
         "fuzzgoat/fuzzgoat",
         f"{FUZZGOAT_PATH}/fuzzgoat",
@@ -234,12 +214,12 @@ def up(n):
     )
 
     # Upturn LM
-    fluffi.set_lm(s, 1)
+    f.set_lm(1)
 
     # Upturn GRE
-    fluffi.set_gre(s, fuzzjob_name, 2, 10, 10)
+    f.set_gre(fuzzjob, 2, 10, 10)
 
-    log.info(f"1021-{n} started")
+    log.info(f"1021-{f.n} started")
 
 
 if __name__ == "__main__":
