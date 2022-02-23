@@ -15,8 +15,6 @@ SSH_WORKER_FMT = "worker{}"
 WORKER_NAME_FMT = "fluffi-1021-{}-Linux1"
 ARCH = "x64"
 FLUFFI_URL = "http://web.fluffi:8880"
-FUZZJOB_ID_REGEX = r'"/projects/archive/(\d+)"'
-FUZZJOB_NAME_REGEX = r"<h1>([a-zA-Z0-9]+)</h1>"
 PM_URL = "http://pole.fluffi:8888/api/v2"
 
 # Get logger
@@ -134,11 +132,13 @@ class FluffiInstance:
 
     def down(self):
         self.info("Stopping...")
-        fuzzjob = self.get_fuzzjob()
-        self.set_gre(fuzzjob, 0, 0, 0)
+        fuzzjobs = self.get_fuzzjobs()
+        for fuzzjob in fuzzjobs:
+            self.set_gre(fuzzjob, 0, 0, 0)
         self.set_lm(0)
         self.kill_leftover_agents()
-        self.archive_fuzzjob(fuzzjob)
+        for fuzzjob in fuzzjobs:
+            self.archive_fuzzjobq(fuzzjob)
         self.clear_dirs()
         self.info("Stopped")
 
@@ -174,19 +174,13 @@ class FluffiInstance:
 
     ### Fluffi Web ###
 
-    def get_fuzzjob(self):
+    def get_fuzzjobs(self):
         r = self.s.get(f"{FLUFFI_URL}/projects")
-        try:
-            id = int(re.search(FUZZJOB_ID_REGEX, r.text).group(1))
-        except:
-            id = -1  # no current fuzzjob
-            name = None
-        self.debug(f"Fuzzjob ID: {id}")
-        if id != -1:
-            r = self.s.get(f"{FLUFFI_URL}/projects/view/{id}")
-            name = re.search(FUZZJOB_NAME_REGEX, r.text).group(1)
-            self.debug(f"Fuzzjob name: {name}")
-        return Fuzzjob(name, id)
+        matches = re.findall(r'<a href="/projects/view/(\d+)">(.+)</a>', r.text)
+        fuzzjobs = []
+        for id, name in matches:
+            fuzzjobs.append(Fuzzjob(name, int(id)))
+        return fuzzjobs
 
     def new_fuzzjob(self, name_prefix, target_path, module_path, seed_path):
         self.debug(f"Creating new fuzzjob prefixed {name_prefix}...")
