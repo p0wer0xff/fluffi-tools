@@ -1,16 +1,14 @@
 import logging
 import os
 import re
+import socket
 import subprocess
 import time
 
-import requests
+import util
 
 # Constants
-FLUFFI_DB_ERROR_STR = "Error: Database connection failed"
-REQ_SLEEP_TIME = 0.25
-PROXY_PORT_BASE = 9000
-FLUFFI_PATH_FMT = "/home/sears/fluffi{}"
+FLUFFI_PATH_FMT = os.path.expanduser("~/fluffi{}")
 LOCATION_FMT = "1021-{}"
 SSH_MASTER_FMT = "master{}"
 SSH_WORKER_FMT = "worker{}"
@@ -25,44 +23,6 @@ PM_URL = "http://pole.fluffi:8888/api/v2"
 log = logging.getLogger("fluffi-tools")
 
 
-class FaultTolerantSession(requests.Session):
-    def __init__(self, n, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.location = LOCATION_FMT.format(n)
-
-        # Use SSH proxy server
-        proxy_port = PROXY_PORT_BASE + n
-        proxies = {
-            "http": f"socks5h://127.0.0.1:{proxy_port}",
-            "https": f"socks5h://127.0.0.1:{proxy_port}",
-        }
-        self.proxies.update(proxies)
-
-    # Add location to log messages
-    def __log(self, msg):
-        return f"{self.location}: {msg}"
-
-    def warn(self, msg):
-        return log.warn(self.__log(msg))
-
-    # Perform fault tolerant requests
-    def request(self, *args, **kwargs):
-        while True:
-            try:
-                r = super().request(*args, **kwargs)
-            except Exception as e:
-                self.warn(f"Request exception: {e}")
-                time.sleep(REQ_SLEEP_TIME)
-                continue
-            if FLUFFI_DB_ERROR_STR in r.text:
-                self.warn("Fluffi web app DB connection failed")
-            elif not r.ok:
-                self.warn(f"Request got status code {r.status_code}")
-            else:
-                return r
-            time.sleep(REQ_SLEEP_TIME)
-
-
 class Fuzzjob:
     def __init__(self, name, id):
         self.name = name
@@ -73,21 +33,29 @@ class FluffiInstance:
     def __init__(self, n):
         # Set members
         self.n = n
-        self.proxy_port = PROXY_PORT_BASE + self.n
         self.fluffi_path = FLUFFI_PATH_FMT.format(self.n)
         self.location = LOCATION_FMT.format(self.n)
-        self.ssh_master = SSH_MASTER_FMT.format(self.n)
-        self.ssh_worker = SSH_WORKER_FMT.format(self.n)
         self.worker_name = WORKER_NAME_FMT.format(self.n)
 
-        # Start proxy and initialize the session
-        self.start_proxy()
-        self.s = FaultTolerantSession(self.n)
+        # Create SSH connections
+        self.ssh_master, self.sftp_master, self.master_addr = util.ssh_connect(
+            SSH_MASTER_FMT.format(self.n)
+        )
+        self.ssh_worker, self.sftp_worker, _ = util.ssh_connect(
+            SSH_WORKER_FMT.format(self.n)
+        )
+
+        # Check the proxy and initialize the session
+        self.check_proxy()
+        self.s = util.FaultTolerantSession(self)
         self.s.get(FLUFFI_URL)
 
-    # Stop proxy on destruction
+    # Close SSH sessions on destruction
     def __del__(self):
-        self.stop_proxy()
+        self.sftp_master.close()
+        self.sftp_worker.close()
+        self.ssh_master.close()
+        self.ssh_worker.close()
 
     # Add location to log messages
     def __log(self, msg):
@@ -98,6 +66,9 @@ class FluffiInstance:
 
     def info(self, msg):
         return log.info(self.__log(msg))
+
+    def warn(self, msg):
+        return log.warn(self.__log(msg))
 
     def error(self, msg):
         return log.error(self.__log(msg))
@@ -138,25 +109,12 @@ class FluffiInstance:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        subprocess.run(
-            [
-                "scp",
-                f"{self.fluffi_path}/core/x86-64/bin/fluffi.zip",
-                f"{self.ssh_worker}:/home/fluffi_linux_user/fluffi/persistent/{ARCH}",
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        self.sftp_worker.put(
+            f"{self.fluffi_path}/core/x86-64/bin/fluffi.zip",
+            f"/home/fluffi_linux_user/fluffi/persistent/{ARCH}/fluffi.zip",
         )
-        subprocess.run(
-            [
-                "ssh",
-                f"{self.ssh_worker}",
-                "cd /home/fluffi_linux_user/fluffi/persistent/x64 && unzip -o fluffi.zip",
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        self.ssh_worker.exec_command(
+            "cd /home/fluffi_linux_user/fluffi/persistent/x64 && unzip -o fluffi.zip",
         )
         self.debug("New build transferred")
 
@@ -191,26 +149,28 @@ class FluffiInstance:
 
     ### Proxy ###
 
-    def stop_proxy(self):
-        subprocess.run(
-            f"lsof -ti tcp:{self.proxy_port} | xargs kill",
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        self.debug(f"Stopped proxy on port {self.proxy_port}")
+    def check_proxy(self):
+        # Check if the port is open
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(3)
+        try:
+            s.connect((self.master_addr, util.PROXY_PORT))
+            s.close()
+            self.info("Proxy is open")
+            return
+        except Exception as e:
+            self.warn(f"Failed connecting to proxy: {e}")
 
-    def start_proxy(self):
-        self.stop_proxy()
-        subprocess.run(
-            f"ssh {self.ssh_master} -D {self.proxy_port} -N &",
-            check=True,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        # Start proxy server
+        _, stdout, stderr = self.ssh_master.exec_command(
+            f"ssh localhost -D 0.0.0.0:{util.PROXY_PORT} -N -f"
         )
-        time.sleep(0.5)
-        self.debug(f"Started proxy on port {self.proxy_port}")
+        if stdout.channel.recv_exit_status() != 0:
+            self.error(f"Error starting proxy: {stderr.read()}")
+            raise Exception("Error starting proxy")
+        time.sleep(1)
+        self.debug(f"Started proxy")
+        self.check_proxy()
 
     ### Fluffi Web ###
 
@@ -283,7 +243,7 @@ class FluffiInstance:
             r = self.s.get(f"{FLUFFI_URL}/progressArchiveFuzzjob")
             if "5/5" in r.text:
                 break
-            time.sleep(REQ_SLEEP_TIME)
+            time.sleep(util.REQ_SLEEP_TIME)
         self.debug("Fuzzjob archived")
 
     def set_lm(self, num):
@@ -329,7 +289,7 @@ class FluffiInstance:
     ### Polemarch ###
 
     def manage_agents(self):
-        s = FaultTolerantSession(self.n)
+        s = util.FaultTolerantSession(self)
         s.auth = ("admin", "admin")
         self.debug("Starting manage agents task...")
         r = s.post(f"{PM_URL}/project/1/periodic_task/3/execute/")
@@ -339,34 +299,21 @@ class FluffiInstance:
             r = s.get(f"{PM_URL}/project/1/history/{history_id}")
             if r.json()["status"] == "OK":
                 break
-            time.sleep(REQ_SLEEP_TIME)
+            time.sleep(util.REQ_SLEEP_TIME)
         self.debug("Manage agents success")
 
     ### SSH Cleanup ###
 
     def kill_leftover_agents(self):
         self.debug("Killing leftover agents...")
-        subprocess.run(
-            [
-                "ssh",
-                self.ssh_worker,
-                f"pkill -f '/home/fluffi_linux_user/fluffi/persistent/{ARCH}/'",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        self.ssh_worker.exec_command(
+            f"pkill -f '/home/fluffi_linux_user/fluffi/persistent/{ARCH}/'",
         )
         self.debug("Killed leftover agents")
 
     def clear_dirs(self):
         self.debug("Deleting log/testcase directories...")
-        subprocess.run(
-            [
-                "ssh",
-                self.ssh_worker,
-                "rm -rf /home/fluffi_linux_user/fluffi/persistent/x64/logs /home/fluffi_linux_user/fluffi/persistent/x64/testcaseFiles",
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        self.ssh_worker.exec_command(
+            "rm -rf /home/fluffi_linux_user/fluffi/persistent/x64/logs /home/fluffi_linux_user/fluffi/persistent/x64/testcaseFiles"
         )
         self.debug("Log/testcase directories deleted")

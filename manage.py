@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 import subprocess
 
 import fluffi
@@ -9,9 +10,8 @@ import fluffi
 # Constants
 N_MIN = 5
 N_MAX = 8
-FLUFFI_PATH_FMT = "/home/sears/fluffi{}"
 GIT_URL = "https://github.com/sears-s/fluffi"
-FUZZGOAT_PATH = "/home/sears/fluffi-tools/fuzzgoat"
+FUZZGOAT_PATH = os.path.expanduser("~/fluffi-tools/fuzzgoat")
 UP_ARGS = [
     "sears",
     "fuzzgoat/fuzzgoat",
@@ -79,7 +79,7 @@ def clone(n):
     log.info(f"Cloning 1021-{n}...")
 
     # Init string
-    fluffi_path = FLUFFI_PATH_FMT.format(n)
+    fluffi_path = fluffi.FLUFFI_PATH_FMT.format(n)
 
     # Clone the repo and switch to branch
     subprocess.run(
