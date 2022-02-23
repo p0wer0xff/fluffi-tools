@@ -12,7 +12,8 @@ REQ_SLEEP_TIME = 0.25
 PROXY_PORT_BASE = 9000
 FLUFFI_PATH_FMT = "/home/sears/fluffi{}"
 LOCATION_FMT = "1021-{}"
-SSH_SERVER_FMT = "worker{}"
+SSH_MASTER_FMT = "master{}"
+SSH_WORKER_FMT = "worker{}"
 WORKER_NAME_FMT = "fluffi-1021-{}-Linux1"
 ARCH = "x64"
 FLUFFI_URL = "http://web.fluffi:8880"
@@ -75,7 +76,8 @@ class FluffiInstance:
         self.proxy_port = PROXY_PORT_BASE + self.n
         self.fluffi_path = FLUFFI_PATH_FMT.format(self.n)
         self.location = LOCATION_FMT.format(self.n)
-        self.ssh_server = SSH_SERVER_FMT.format(self.n)
+        self.ssh_master = SSH_MASTER_FMT.format(self.n)
+        self.ssh_worker = SSH_WORKER_FMT.format(self.n)
         self.worker_name = WORKER_NAME_FMT.format(self.n)
 
         # Start proxy and initialize the session
@@ -140,7 +142,7 @@ class FluffiInstance:
             [
                 "scp",
                 f"{self.fluffi_path}/core/x86-64/bin/fluffi.zip",
-                f"{self.ssh_server}:/home/fluffi_linux_user/fluffi/persistent/{ARCH}",
+                f"{self.ssh_worker}:/home/fluffi_linux_user/fluffi/persistent/{ARCH}",
             ],
             check=True,
             stdout=subprocess.DEVNULL,
@@ -149,7 +151,7 @@ class FluffiInstance:
         subprocess.run(
             [
                 "ssh",
-                f"{self.ssh_server}",
+                f"{self.ssh_worker}",
                 "cd /home/fluffi_linux_user/fluffi/persistent/x64 && unzip -o fluffi.zip",
             ],
             check=True,
@@ -201,7 +203,7 @@ class FluffiInstance:
     def start_proxy(self):
         self.stop_proxy()
         subprocess.run(
-            f"ssh {self.ssh_server} -D {self.proxy_port} -N &",
+            f"ssh {self.ssh_master} -D {self.proxy_port} -N &",
             check=True,
             shell=True,
             stdout=subprocess.DEVNULL,
@@ -347,7 +349,7 @@ class FluffiInstance:
         subprocess.run(
             [
                 "ssh",
-                self.ssh_server,
+                self.ssh_worker,
                 f"pkill -f '/home/fluffi_linux_user/fluffi/persistent/{ARCH}/'",
             ],
             stdout=subprocess.DEVNULL,
@@ -360,7 +362,7 @@ class FluffiInstance:
         subprocess.run(
             [
                 "ssh",
-                self.ssh_server,
+                self.ssh_worker,
                 "rm -rf /home/fluffi_linux_user/fluffi/persistent/x64/logs /home/fluffi_linux_user/fluffi/persistent/x64/testcaseFiles",
             ],
             check=True,
