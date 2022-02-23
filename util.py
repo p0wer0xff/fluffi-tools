@@ -21,6 +21,7 @@ with open(os.path.expanduser("~/.ssh/config")) as f:
 
 
 def ssh_connect(hostname):
+    log.debug(f"Connecting to {hostname} SSH server")
     host_config = ssh_config.lookup(hostname)
     host_config = {
         "hostname": host_config["hostname"],
@@ -30,6 +31,7 @@ def ssh_connect(hostname):
     client = paramiko.SSHClient()
     client.load_system_host_keys()
     client.connect(**host_config)
+    log.debug(f"Connected to {hostname} SSH server")
     return client, client.open_sftp(), host_config["hostname"]
 
 
@@ -55,7 +57,7 @@ class FaultTolerantSession(requests.Session):
                 time.sleep(REQ_SLEEP_TIME)
                 continue
             if FLUFFI_DB_ERROR_STR in r.text:
-                log.warn("Fluffi web app DB connection failed")
+                log.warn("Fluffi web DB connection failed")
             elif not r.ok:
                 log.warn(f"Request got status code {r.status_code}")
             else:

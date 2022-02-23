@@ -40,8 +40,9 @@ def main():
         datefmt="%m/%d/%Y %H:%M:%S",
     )
 
-    # Connect to instance
-    f = fluffi.Instance(args.n)
+    # Connect to instance and ensure nothing is running
+    inst = fluffi.Instance(args.n)
+    inst.down()
 
 
 if __name__ == "__main__":

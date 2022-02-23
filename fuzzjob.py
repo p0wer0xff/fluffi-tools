@@ -21,14 +21,14 @@ class Fuzzjob:
     ### Fluffi Web ###
 
     def archive(self):
-        log.debug("Archiving fuzzjob...")
+        log.debug(f"Archiving fuzzjob {self.name}...")
         self.f.s.post(f"{fluffi.FLUFFI_URL}/projects/archive/{self.id}")
         while True:
             r = self.f.s.get(f"{fluffi.FLUFFI_URL}/progressArchiveFuzzjob")
             if "5/5" in r.text:
                 break
             time.sleep(util.REQ_SLEEP_TIME)
-        log.debug("Fuzzjob archived")
+        log.debug(f"Fuzzjob {self.name} archived")
 
     def set_gre(self, gen, run, eva):
         log.debug(f"Setting GRE to {gen}, {run}, {eva} for {self.name}...")

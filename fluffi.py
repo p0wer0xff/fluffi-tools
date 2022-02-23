@@ -41,7 +41,9 @@ class Instance:
         )
 
         # Connect to DB
+        log.debug("Connecting to DB...")
         self.db = pymysql.connect(host=self.master_addr, user=DB_NAME, password=DB_NAME)
+        log.debug("Connected to DB")
 
         # Check the proxy and initialize the session
         self.check_proxy()
@@ -136,6 +138,7 @@ class Instance:
 
     def check_proxy(self):
         # Check if the port is open
+        log.debug("Checking proxy port...")
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(3)
         try:
@@ -147,6 +150,7 @@ class Instance:
             log.warn(f"Failed connecting to proxy: {e}")
 
         # Start proxy server
+        log.debug("Starting proxy...")
         _, stdout, stderr = self.ssh_master.exec_command(
             f"ssh localhost -D 0.0.0.0:{util.PROXY_PORT} -N -f"
         )
@@ -154,7 +158,7 @@ class Instance:
             log.error(f"Error starting proxy: {stderr.read()}")
             raise Exception("Error starting proxy")
         time.sleep(1)
-        log.debug(f"Started proxy")
+        log.info(f"Started proxy")
         self.check_proxy()
 
     def kill_leftover_agents(self):
@@ -215,7 +219,7 @@ class Instance:
                 log.error(f"Error creating new fuzzjob named {name}: {r.text}")
                 continue
             break
-        id = int(r.url.split("/view/")[1])
+        id = r.url.split("/view/")[1]
         log.debug(f"Fuzzjob named {name} created with ID {id}")
         return Fuzzjob(self, id, name)
 
@@ -239,9 +243,9 @@ class Instance:
     ### Polemarch ###
 
     def manage_agents(self):
+        log.debug("Starting manage agents task...")
         s = util.FaultTolerantSession(self)
         s.auth = ("admin", "admin")
-        log.debug("Starting manage agents task...")
         r = s.post(f"{PM_URL}/project/1/periodic_task/3/execute/")
         history_id = r.json()["history_id"]
         time.sleep(1)
@@ -255,6 +259,7 @@ class Instance:
     ### DB ###
 
     def get_fuzzjobs(self):
+        log.debug("Fetching fuzzjobs...")
         self.db.select_db(DB_NAME)
         fuzzjobs = []
         with self.db.cursor() as c:
@@ -262,4 +267,5 @@ class Instance:
             for id, name in c.fetchall():
                 log.debug(f"Found fuzzjob with ID {id} and name {name}")
                 fuzzjobs.append(Fuzzjob(self, id, name))
+        log.debug("Fuzzjobs fetched")
         return fuzzjobs
