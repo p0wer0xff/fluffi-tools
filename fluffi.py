@@ -21,7 +21,7 @@ PM_URL = "http://pole.fluffi:8888/api/v2"
 DB_NAME = "fluffi_gm"
 
 # Get logger
-log = logging.getLogger("fluffi-tools")
+log = logging.getLogger("fluffi")
 
 
 class Instance:
@@ -56,40 +56,24 @@ class Instance:
         self.ssh_worker.close()
         self.db.close()
 
-    # Add location to log messages
-    def __log(self, msg):
-        return f"{self.location}: {msg}"
-
-    def debug(self, msg):
-        return log.debug(self.__log(msg))
-
-    def info(self, msg):
-        return log.info(self.__log(msg))
-
-    def warn(self, msg):
-        return log.warn(self.__log(msg))
-
-    def error(self, msg):
-        return log.error(self.__log(msg))
-
     ### High Level Functionality ###
 
     def deploy(self, clean=True):
-        self.info("Deploying...")
+        log.info("Deploying...")
 
         # Clean old build
         if clean:
-            self.debug("Cleaning old build...")
+            log.debug("Cleaning old build...")
             subprocess.run(
                 ["rm", "-rf", f"{self.fluffi_path}/core/x86-64"],
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            self.debug("Old build cleaned")
+            log.debug("Old build cleaned")
 
         # Compile new build
-        self.debug("Compiling new build...")
+        log.debug("Compiling new build...")
         subprocess.run(
             ["sudo", "./buildAll.sh"],
             cwd=f"{self.fluffi_path}/build/ubuntu_based",
@@ -97,10 +81,10 @@ class Instance:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        self.debug("New build compiled")
+        log.debug("New build compiled")
 
         # Zip, SCP, and unzip
-        self.debug("Transferring new build...")
+        log.debug("Transferring new build...")
         subprocess.run(
             ["zip", "-r", "fluffi.zip", "."],
             cwd=f"{self.fluffi_path}/core/x86-64/bin",
@@ -115,12 +99,12 @@ class Instance:
         self.ssh_worker.exec_command(
             "cd /home/fluffi_linux_user/fluffi/persistent/x64 && unzip -o fluffi.zip",
         )
-        self.debug("New build transferred")
+        log.debug("New build transferred")
 
-        self.info("Deployed")
+        log.info("Deployed")
 
     def up(self, fuzzjob_name_prefix, target_path, module_path, seed_path):
-        self.info("Starting...")
+        log.info("Starting...")
         fuzzjob = self.new_fuzzjob(
             fuzzjob_name_prefix,
             target_path,
@@ -129,10 +113,10 @@ class Instance:
         )
         self.set_lm(1)
         fuzzjob.set_gre(2, 10, 10)
-        self.info("Started")
+        log.info("Started")
 
     def down(self):
-        self.info("Stopping...")
+        log.info("Stopping...")
         fuzzjobs = self.get_fuzzjobs()
         for fuzzjob in fuzzjobs:
             fuzzjob.set_gre(0, 0, 0)
@@ -141,7 +125,7 @@ class Instance:
         for fuzzjob in fuzzjobs:
             fuzzjob.archive()
         self.clear_dirs()
-        self.info("Stopped")
+        log.info("Stopped")
 
     def all(self, fuzzjob_name_prefix, target_path, module_path, seed_path):
         self.down()
@@ -157,40 +141,40 @@ class Instance:
         try:
             s.connect((self.master_addr, util.PROXY_PORT))
             s.close()
-            self.info("Proxy is open")
+            log.info("Proxy is open")
             return
         except Exception as e:
-            self.warn(f"Failed connecting to proxy: {e}")
+            log.warn(f"Failed connecting to proxy: {e}")
 
         # Start proxy server
         _, stdout, stderr = self.ssh_master.exec_command(
             f"ssh localhost -D 0.0.0.0:{util.PROXY_PORT} -N -f"
         )
         if stdout.channel.recv_exit_status() != 0:
-            self.error(f"Error starting proxy: {stderr.read()}")
+            log.error(f"Error starting proxy: {stderr.read()}")
             raise Exception("Error starting proxy")
         time.sleep(1)
-        self.debug(f"Started proxy")
+        log.debug(f"Started proxy")
         self.check_proxy()
 
     def kill_leftover_agents(self):
-        self.debug("Killing leftover agents...")
+        log.debug("Killing leftover agents...")
         self.ssh_worker.exec_command(
             f"pkill -f '/home/fluffi_linux_user/fluffi/persistent/{ARCH}/'",
         )
-        self.debug("Killed leftover agents")
+        log.debug("Killed leftover agents")
 
     def clear_dirs(self):
-        self.debug("Deleting log/testcase directories...")
+        log.debug("Deleting log/testcase directories...")
         self.ssh_worker.exec_command(
             "rm -rf /home/fluffi_linux_user/fluffi/persistent/x64/logs /home/fluffi_linux_user/fluffi/persistent/x64/testcaseFiles"
         )
-        self.debug("Log/testcase directories deleted")
+        log.debug("Log/testcase directories deleted")
 
     ### Fluffi Web ###
 
     def new_fuzzjob(self, name_prefix, target_path, module_path, seed_path):
-        self.debug(f"Creating new fuzzjob prefixed {name_prefix}...")
+        log.debug(f"Creating new fuzzjob prefixed {name_prefix}...")
         while True:
             name = f"{name_prefix}{int(time.time())}"
             r = self.s.post(
@@ -228,15 +212,15 @@ class Instance:
                 ],
             )
             if "Success" not in r.text:
-                self.error(f"Error creating new fuzzjob named {name}: {r.text}")
+                log.error(f"Error creating new fuzzjob named {name}: {r.text}")
                 continue
             break
         id = int(r.url.split("/view/")[1])
-        self.debug(f"Fuzzjob named {name} created with ID {id}")
+        log.debug(f"Fuzzjob named {name} created with ID {id}")
         return Fuzzjob(self, id, name)
 
     def set_lm(self, num):
-        self.debug(f"Setting LM to {num}...")
+        log.debug(f"Setting LM to {num}...")
         while True:
             r = self.s.post(
                 f"{FLUFFI_URL}/systems/configureSystemInstances/{self.worker_name}",
@@ -246,18 +230,18 @@ class Instance:
                 },
             )
             if "Success!" not in r.text:
-                self.error(f"Error setting LM to {num}: {r.text}")
+                log.error(f"Error setting LM to {num}: {r.text}")
                 continue
             break
         self.manage_agents()
-        self.debug(f"LM set to {num}")
+        log.debug(f"LM set to {num}")
 
     ### Polemarch ###
 
     def manage_agents(self):
         s = util.FaultTolerantSession(self)
         s.auth = ("admin", "admin")
-        self.debug("Starting manage agents task...")
+        log.debug("Starting manage agents task...")
         r = s.post(f"{PM_URL}/project/1/periodic_task/3/execute/")
         history_id = r.json()["history_id"]
         time.sleep(1)
@@ -266,7 +250,7 @@ class Instance:
             if r.json()["status"] == "OK":
                 break
             time.sleep(util.REQ_SLEEP_TIME)
-        self.debug("Manage agents success")
+        log.debug("Manage agents success")
 
     ### DB ###
 
@@ -276,6 +260,6 @@ class Instance:
         with self.db.cursor() as c:
             c.execute("SELECT ID, name from fuzzjob")
             for id, name in c.fetchall():
-                self.debug(f"Found fuzzjob with ID {id} and name {name}")
+                log.debug(f"Found fuzzjob with ID {id} and name {name}")
                 fuzzjobs.append(Fuzzjob(self, id, name))
         return fuzzjobs

@@ -20,7 +20,7 @@ UP_ARGS = [
 ]
 
 # Get logger
-log = logging.getLogger("fluffi-tools")
+log = logging.getLogger("fluffi")
 
 
 def main():
@@ -36,7 +36,7 @@ def main():
 
     # Check host
     if args.n and (args.n < N_MIN or args.n > N_MAX):
-        log.error("Invalid host")
+        print("Invalid host")
         exit(1)
 
     # Process command
@@ -71,15 +71,14 @@ def main():
         else:
             fluffi.Instance(args.n).all(*UP_ARGS)
     else:
-        log.error("Invalid command")
+        print("Invalid command")
         exit(1)
 
 
 def clone(n):
-    log.info(f"Cloning 1021-{n}...")
-
-    # Init string
+    location = fluffi.LOCATION_FMT.format(n)
     fluffi_path = fluffi.FLUFFI_PATH_FMT.format(n)
+    print(f"Cloning {location}...")
 
     # Clone the repo and switch to branch
     subprocess.run(
@@ -89,7 +88,7 @@ def clone(n):
         stderr=subprocess.DEVNULL,
     )
     subprocess.run(
-        ["git", "checkout", f"1021-{n}"],
+        ["git", "checkout", location],
         cwd=fluffi_path,
         check=True,
         stdout=subprocess.DEVNULL,
@@ -110,7 +109,7 @@ def clone(n):
         check=True,
     )
 
-    log.info(f"1021-{n} cloned")
+    print(f"{location} cloned")
 
 
 if __name__ == "__main__":

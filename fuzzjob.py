@@ -1,3 +1,4 @@
+import logging
 import time
 
 import fluffi
@@ -5,6 +6,9 @@ import util
 
 # Constants
 DB_FUZZJOB_FMT = "fluffi_{}"
+
+# Get logger
+log = logging.getLogger("fluffi")
 
 
 class Fuzzjob:
@@ -17,17 +21,17 @@ class Fuzzjob:
     ### Fluffi Web ###
 
     def archive(self):
-        self.f.debug("Archiving fuzzjob...")
+        log.debug("Archiving fuzzjob...")
         self.f.s.post(f"{fluffi.FLUFFI_URL}/projects/archive/{self.id}")
         while True:
             r = self.f.s.get(f"{fluffi.FLUFFI_URL}/progressArchiveFuzzjob")
             if "5/5" in r.text:
                 break
             time.sleep(util.REQ_SLEEP_TIME)
-        self.f.debug("Fuzzjob archived")
+        log.debug("Fuzzjob archived")
 
     def set_gre(self, gen, run, eva):
-        self.f.debug(f"Setting GRE to {gen}, {run}, {eva} for {self.name}...")
+        log.debug(f"Setting GRE to {gen}, {run}, {eva} for {self.name}...")
         while True:
             r = self.f.s.post(
                 f"{fluffi.FLUFFI_URL}/systems/configureFuzzjobInstances/{self.name}",
@@ -41,10 +45,10 @@ class Fuzzjob:
                 },
             )
             if "Success!" not in r.text:
-                self.f.error(
+                log.error(
                     f"Error setting GRE to {gen}, {run}, {eva} for {self.name}: {r.text}"
                 )
                 continue
             break
         self.f.manage_agents()
-        self.f.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")
+        log.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")
