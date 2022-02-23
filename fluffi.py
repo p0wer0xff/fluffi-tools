@@ -5,6 +5,8 @@ import socket
 import subprocess
 import time
 
+import pymysql
+
 import util
 
 # Constants
@@ -16,15 +18,17 @@ WORKER_NAME_FMT = "fluffi-1021-{}-Linux1"
 ARCH = "x64"
 FLUFFI_URL = "http://web.fluffi:8880"
 PM_URL = "http://pole.fluffi:8888/api/v2"
+DB_NAME = "fluffi_gm"
 
 # Get logger
 log = logging.getLogger("fluffi-tools")
 
 
 class Fuzzjob:
-    def __init__(self, name, id):
-        self.name = name
+    def __init__(self, id, name, db):
         self.id = id
+        self.name = name
+        self.db = db
 
 
 class FluffiInstance:
@@ -43,17 +47,21 @@ class FluffiInstance:
             SSH_WORKER_FMT.format(self.n)
         )
 
+        # Connect to DB
+        self.db = pymysql.connect(host=self.master_addr, user=DB_NAME, password=DB_NAME)
+
         # Check the proxy and initialize the session
         self.check_proxy()
         self.s = util.FaultTolerantSession(self)
         self.s.get(FLUFFI_URL)
 
-    # Close SSH sessions on destruction
+    # Close SSH and DB sessions on destruction
     def __del__(self):
         self.sftp_master.close()
         self.sftp_worker.close()
         self.ssh_master.close()
         self.ssh_worker.close()
+        self.db.close()
 
     # Add location to log messages
     def __log(self, msg):
@@ -138,7 +146,7 @@ class FluffiInstance:
         self.set_lm(0)
         self.kill_leftover_agents()
         for fuzzjob in fuzzjobs:
-            self.archive_fuzzjobq(fuzzjob)
+            self.archive_fuzzjob(fuzzjob)
         self.clear_dirs()
         self.info("Stopped")
 
@@ -147,7 +155,7 @@ class FluffiInstance:
         self.deploy()
         self.up(fuzzjob_name_prefix, target_path, module_path, seed_path)
 
-    ### Proxy ###
+    ### SSH ###
 
     def check_proxy(self):
         # Check if the port is open
@@ -172,15 +180,21 @@ class FluffiInstance:
         self.debug(f"Started proxy")
         self.check_proxy()
 
-    ### Fluffi Web ###
+    def kill_leftover_agents(self):
+        self.debug("Killing leftover agents...")
+        self.ssh_worker.exec_command(
+            f"pkill -f '/home/fluffi_linux_user/fluffi/persistent/{ARCH}/'",
+        )
+        self.debug("Killed leftover agents")
 
-    def get_fuzzjobs(self):
-        r = self.s.get(f"{FLUFFI_URL}/projects")
-        matches = re.findall(r'<a href="/projects/view/(\d+)">(.+)</a>', r.text)
-        fuzzjobs = []
-        for id, name in matches:
-            fuzzjobs.append(Fuzzjob(name, int(id)))
-        return fuzzjobs
+    def clear_dirs(self):
+        self.debug("Deleting log/testcase directories...")
+        self.ssh_worker.exec_command(
+            "rm -rf /home/fluffi_linux_user/fluffi/persistent/x64/logs /home/fluffi_linux_user/fluffi/persistent/x64/testcaseFiles"
+        )
+        self.debug("Log/testcase directories deleted")
+
+    ### Fluffi Web ###
 
     def new_fuzzjob(self, name_prefix, target_path, module_path, seed_path):
         self.debug(f"Creating new fuzzjob prefixed {name_prefix}...")
@@ -260,7 +274,7 @@ class FluffiInstance:
     def set_gre(self, fuzzjob, gen, run, eva):
         if fuzzjob.id == -1:
             return
-        self.debug(f"Setting GRE to {gen}, {run}, {eva}...")
+        self.debug(f"Setting GRE to {gen}, {run}, {eva} for {fuzzjob.name}...")
         while True:
             r = self.s.post(
                 f"{FLUFFI_URL}/systems/configureFuzzjobInstances/{fuzzjob.name}",
@@ -274,11 +288,13 @@ class FluffiInstance:
                 },
             )
             if "Success!" not in r.text:
-                self.error(f"Error setting GRE to {gen}, {run}, {eva}: {r.text}")
+                self.error(
+                    f"Error setting GRE to {gen}, {run}, {eva} for {fuzzjob.name}: {r.text}"
+                )
                 continue
             break
         self.manage_agents()
-        self.debug(f"GRE set to {gen}, {run}, {eva}")
+        self.debug(f"GRE set to {gen}, {run}, {eva} for {fuzzjob.name}")
 
     ### Polemarch ###
 
@@ -296,18 +312,14 @@ class FluffiInstance:
             time.sleep(util.REQ_SLEEP_TIME)
         self.debug("Manage agents success")
 
-    ### SSH Cleanup ###
+    ### DB ###
 
-    def kill_leftover_agents(self):
-        self.debug("Killing leftover agents...")
-        self.ssh_worker.exec_command(
-            f"pkill -f '/home/fluffi_linux_user/fluffi/persistent/{ARCH}/'",
-        )
-        self.debug("Killed leftover agents")
-
-    def clear_dirs(self):
-        self.debug("Deleting log/testcase directories...")
-        self.ssh_worker.exec_command(
-            "rm -rf /home/fluffi_linux_user/fluffi/persistent/x64/logs /home/fluffi_linux_user/fluffi/persistent/x64/testcaseFiles"
-        )
-        self.debug("Log/testcase directories deleted")
+    def get_fuzzjobs(self):
+        self.db.select_db(DB_NAME)
+        fuzzjobs = []
+        with self.db.cursor() as c:
+            c.execute("SELECT ID, name, DBName from fuzzjob")
+            for id, name, db in c.fetchall():
+                self.debug(f"Found fuzzjob with ID {id} and name{name}")
+                fuzzjobs.append(Fuzzjob(id, name, db))
+        return fuzzjobs
