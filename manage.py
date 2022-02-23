@@ -12,12 +12,6 @@ N_MIN = 5
 N_MAX = 8
 GIT_URL = "https://github.com/sears-s/fluffi"
 FUZZGOAT_PATH = os.path.expanduser("~/fluffi-tools/fuzzgoat")
-UP_ARGS = [
-    "sears",
-    "fuzzgoat/fuzzgoat",
-    f"{FUZZGOAT_PATH}/fuzzgoat",
-    f"{FUZZGOAT_PATH}/seed",
-]
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -39,6 +33,15 @@ def main():
         print("Invalid host")
         exit(1)
 
+    # Setup up args
+    with open(os.path.join(FUZZGOAT_PATH, "fuzzgoat", "rb")) as f:
+        data = f.read()
+    module = ("fuzzgoat", data)
+    with open(os.path.join(FUZZGOAT_PATH, "seed", "rb")) as f:
+        data = f.read()
+    seeds = [("seed", data)]
+    up_args = ["sears", "fuzzgoat/fuzzgoat", module, seeds]
+
     # Process command
     if args.command == "clone":
         if args.n is None:
@@ -49,9 +52,9 @@ def main():
     elif args.command == "up":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                fluffi.Instance(i).up(*UP_ARGS)
+                fluffi.Instance(i).up(*up_args)
         else:
-            fluffi.Instance(args.n).up(*UP_ARGS)
+            fluffi.Instance(args.n).up(*up_args)
     elif args.command == "down":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
@@ -67,9 +70,9 @@ def main():
     elif args.command == "all":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                fluffi.Instance(i).all(*UP_ARGS)
+                fluffi.Instance(i).all(*up_args)
         else:
-            fluffi.Instance(args.n).all(*UP_ARGS)
+            fluffi.Instance(args.n).all(*up_args)
     else:
         print("Invalid command")
         exit(1)

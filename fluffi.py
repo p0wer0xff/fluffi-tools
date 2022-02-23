@@ -16,6 +16,7 @@ SSH_MASTER_FMT = "master{}"
 SSH_WORKER_FMT = "worker{}"
 WORKER_NAME_FMT = "fluffi-1021-{}-Linux1"
 ARCH = "x64"
+SUT_PATH = "/home/fluffi_linux_user/fluffi/persistent/SUT/"
 FLUFFI_URL = "http://web.fluffi:8880"
 PM_URL = "http://pole.fluffi:8888/api/v2"
 DB_NAME = "fluffi_gm"
@@ -105,13 +106,10 @@ class Instance:
 
         log.info("Deployed")
 
-    def up(self, fuzzjob_name_prefix, target_path, module_path, seed_path):
+    def up(self, name_prefix, target_path, module, seeds, library_path=None):
         log.info("Starting...")
         fuzzjob = self.new_fuzzjob(
-            fuzzjob_name_prefix,
-            target_path,
-            module_path,
-            seed_path,
+            name_prefix, target_path, module, seeds, library_path
         )
         self.set_lm(1)
         fuzzjob.set_gre(2, 10, 10)
@@ -129,10 +127,10 @@ class Instance:
         self.clear_dirs()
         log.info("Stopped")
 
-    def all(self, fuzzjob_name_prefix, target_path, module_path, seed_path):
+    def all(self, name_prefix, target_path, module, seeds, library_path=None):
         self.down()
         self.deploy()
-        self.up(fuzzjob_name_prefix, target_path, module_path, seed_path)
+        self.up(name_prefix, target_path, module, seeds, library_path)
 
     ### SSH ###
 
@@ -177,44 +175,39 @@ class Instance:
 
     ### Fluffi Web ###
 
-    def new_fuzzjob(self, name_prefix, target_path, module_path, seed_path):
-        log.debug(f"Creating new fuzzjob prefixed {name_prefix}...")
-        while True:
-            name = f"{name_prefix}{int(time.time())}"
-            r = self.s.post(
-                f"{FLUFFI_URL}/projects/createProject",
-                files=[
-                    ("name", (None, name)),
-                    ("subtype", (None, "X64_Lin_DynRioSingle")),
-                    ("generatorTypes", (None, 100)),  # RadamsaMutator
-                    ("generatorTypes", (None, 0)),  # AFLMutator
-                    ("generatorTypes", (None, 0)),  # CaRRoTMutator
-                    ("generatorTypes", (None, 0)),  # HonggfuzzMutator
-                    ("generatorTypes", (None, 0)),  # OedipusMutator
-                    ("generatorTypes", (None, 0)),  # ExternalMutator
-                    ("evaluatorTypes", (None, 100)),  # CoverageEvaluator
-                    ("location", (None, self.location)),
-                    (
-                        "targetCMDLine",
-                        (
-                            None,
-                            os.path.join(
-                                "/home/fluffi_linux_user/fluffi/persistent/SUT/",
-                                target_path,
-                            ),
-                        ),
-                    ),
-                    ("option_module", (None, "hangeTimeout")),
-                    ("option_module_value", (None, 5000)),
-                    (
-                        "targetModulesOnCreate",
-                        ("fuzzgoat", open(module_path, "rb")),
-                    ),
-                    ("targetFile", (None, "")),
-                    ("filename", ("seed", open(seed_path, "rb"))),
-                    ("basicBlockFile", (None, "")),
-                ],
+    def new_fuzzjob(self, name_prefix, target_path, module, seeds, library_path=None):
+        name = f"{name_prefix}{int(time.time())}"
+        log.debug(f"Creating new fuzzjob named {name}...")
+        data = [
+            ("name", (None, name)),
+            ("subtype", (None, "X64_Lin_DynRioSingle")),
+            ("generatorTypes", (None, 100)),  # RadamsaMutator
+            ("generatorTypes", (None, 0)),  # AFLMutator
+            ("generatorTypes", (None, 0)),  # CaRRoTMutator
+            ("generatorTypes", (None, 0)),  # HonggfuzzMutator
+            ("generatorTypes", (None, 0)),  # OedipusMutator
+            ("generatorTypes", (None, 0)),  # ExternalMutator
+            ("evaluatorTypes", (None, 100)),  # CoverageEvaluator
+            ("location", (None, self.location)),
+            ("targetCMDLine", (None, os.path.join(SUT_PATH, target_path))),
+            ("option_module", (None, "hangeTimeout")),
+            ("option_module_value", (None, 5000)),
+            ("targetModulesOnCreate", module),
+            ("targetFile", (None, "")),
+            ("basicBlockFile", (None, "")),
+        ]
+        for seed in seeds:
+            data.append(("filename", seed))
+        if library_path is not None:
+            data.append(("option_module", (None, "additionalEnvParam")))
+            data.append(
+                (
+                    "option_module_value",
+                    (None, f"LD_LIBRARY_PATH={os.path.join(SUT_PATH, library_path)}"),
+                )
             )
+        while True:
+            r = self.s.post(f"{FLUFFI_URL}/projects/createProject", files=data)
             if "Success" not in r.text:
                 log.error(f"Error creating new fuzzjob named {name}: {r.text}")
                 continue
