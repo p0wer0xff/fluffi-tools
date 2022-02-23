@@ -254,11 +254,10 @@ class Instance:
     def get_fuzzjobs(self):
         log.debug("Fetching fuzzjobs...")
         self.db.select_db(DB_NAME)
+        rows = util.db_query(self.db, "SELECT ID, name from fuzzjob")
         fuzzjobs = []
-        with self.db.cursor() as c:
-            c.execute("SELECT ID, name from fuzzjob")
-            for id, name in c.fetchall():
-                log.debug(f"Found fuzzjob with ID {id} and name {name}")
-                fuzzjobs.append(Fuzzjob(self, id, name))
+        for id, name in rows:
+            log.debug(f"Found fuzzjob with ID {id} and name {name}")
+            fuzzjobs.append(Fuzzjob(self, id, name))
         log.debug("Fuzzjobs fetched")
         return fuzzjobs

@@ -34,6 +34,18 @@ def ssh_connect(hostname):
     log.debug(f"Connected to {hostname} SSH server")
     return client, client.open_sftp(), host_config["hostname"]
 
+# Fault tolerant DB query
+def db_query(db, query):
+    while True:
+        try:
+            with db.cursor() as c:
+                c.execute(query)
+                return c.fetchall()
+        except Exception as e:
+            log.error(f"Error for query {query}: {e}")
+        db.ping(reconnect=True)
+        time.sleep(REQ_SLEEP_TIME)
+
 
 class FaultTolerantSession(requests.Session):
     def __init__(self, fluffi, *args, **kwargs):
