@@ -34,7 +34,7 @@ def main():
     location = fluffi.LOCATION_FMT.format(args.n)
 
     # Create experiment directory
-    exp_dir = os.path.join(EXP_BASE_DIR, args.name)
+    exp_dir = os.path.join(EXP_BASE_DIR, args.name, location)
     os.makedirs(exp_dir, exist_ok=True)
 
     # Setup logging
@@ -44,10 +44,6 @@ def main():
         format=f"%(asctime)s %(levelname)s:{location}:%(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
     )
-
-    # Switch to directory based on location
-    exp_dir = os.path.join(exp_dir, location)
-    os.makedirs(exp_dir, exist_ok=True)
 
     # Connect to instance and ensure nothing is running
     inst = fluffi.Instance(args.n)
