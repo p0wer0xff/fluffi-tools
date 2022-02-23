@@ -49,27 +49,27 @@ def main():
     elif args.command == "up":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                fluffi.FluffiInstance(i).up(*UP_ARGS)
+                fluffi.Instance(i).up(*UP_ARGS)
         else:
-            fluffi.FluffiInstance(args.n).up(*UP_ARGS)
+            fluffi.Instance(args.n).up(*UP_ARGS)
     elif args.command == "down":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                fluffi.FluffiInstance(i).down()
+                fluffi.Instance(i).down()
         else:
-            fluffi.FluffiInstance(args.n).down()
+            fluffi.Instance(args.n).down()
     elif args.command == "deploy":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                fluffi.FluffiInstance(i).deploy()
+                fluffi.Instance(i).deploy()
         else:
-            fluffi.FluffiInstance(args.n).deploy()
+            fluffi.Instance(args.n).deploy()
     elif args.command == "all":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                fluffi.FluffiInstance(i).all(*UP_ARGS)
+                fluffi.Instance(i).all(*UP_ARGS)
         else:
-            fluffi.FluffiInstance(args.n).all(*UP_ARGS)
+            fluffi.Instance(args.n).all(*UP_ARGS)
     else:
         log.error("Invalid command")
         exit(1)

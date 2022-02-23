@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import socket
 import subprocess
 import time
@@ -8,6 +7,7 @@ import time
 import pymysql
 
 import util
+from fuzzjob import Fuzzjob
 
 # Constants
 FLUFFI_PATH_FMT = os.path.expanduser("~/fluffi{}")
@@ -24,14 +24,7 @@ DB_NAME = "fluffi_gm"
 log = logging.getLogger("fluffi-tools")
 
 
-class Fuzzjob:
-    def __init__(self, id, name, db):
-        self.id = id
-        self.name = name
-        self.db = db
-
-
-class FluffiInstance:
+class Instance:
     def __init__(self, n):
         # Set members
         self.n = n
@@ -135,18 +128,18 @@ class FluffiInstance:
             seed_path,
         )
         self.set_lm(1)
-        self.set_gre(fuzzjob, 2, 10, 10)
+        fuzzjob.set_gre(2, 10, 10)
         self.info("Started")
 
     def down(self):
         self.info("Stopping...")
         fuzzjobs = self.get_fuzzjobs()
         for fuzzjob in fuzzjobs:
-            self.set_gre(fuzzjob, 0, 0, 0)
+            fuzzjob.set_gre(0, 0, 0)
         self.set_lm(0)
         self.kill_leftover_agents()
         for fuzzjob in fuzzjobs:
-            self.archive_fuzzjob(fuzzjob)
+            fuzzjob.archive()
         self.clear_dirs()
         self.info("Stopped")
 
@@ -240,19 +233,7 @@ class FluffiInstance:
             break
         id = int(r.url.split("/view/")[1])
         self.debug(f"Fuzzjob named {name} created with ID {id}")
-        return Fuzzjob(name, id)
-
-    def archive_fuzzjob(self, fuzzjob):
-        if fuzzjob.id == -1:
-            return
-        self.debug("Archiving fuzzjob...")
-        self.s.post(f"{FLUFFI_URL}/projects/archive/{fuzzjob.id}")
-        while True:
-            r = self.s.get(f"{FLUFFI_URL}/progressArchiveFuzzjob")
-            if "5/5" in r.text:
-                break
-            time.sleep(util.REQ_SLEEP_TIME)
-        self.debug("Fuzzjob archived")
+        return Fuzzjob(self, id, name)
 
     def set_lm(self, num):
         self.debug(f"Setting LM to {num}...")
@@ -270,31 +251,6 @@ class FluffiInstance:
             break
         self.manage_agents()
         self.debug(f"LM set to {num}")
-
-    def set_gre(self, fuzzjob, gen, run, eva):
-        if fuzzjob.id == -1:
-            return
-        self.debug(f"Setting GRE to {gen}, {run}, {eva} for {fuzzjob.name}...")
-        while True:
-            r = self.s.post(
-                f"{FLUFFI_URL}/systems/configureFuzzjobInstances/{fuzzjob.name}",
-                files={
-                    f"{self.worker_name}_tg": (None, gen),
-                    f"{self.worker_name}_tg_arch": (None, ARCH),
-                    f"{self.worker_name}_tr": (None, run),
-                    f"{self.worker_name}_tr_arch": (None, ARCH),
-                    f"{self.worker_name}_te": (None, eva),
-                    f"{self.worker_name}_te_arch": (None, ARCH),
-                },
-            )
-            if "Success!" not in r.text:
-                self.error(
-                    f"Error setting GRE to {gen}, {run}, {eva} for {fuzzjob.name}: {r.text}"
-                )
-                continue
-            break
-        self.manage_agents()
-        self.debug(f"GRE set to {gen}, {run}, {eva} for {fuzzjob.name}")
 
     ### Polemarch ###
 
@@ -318,8 +274,8 @@ class FluffiInstance:
         self.db.select_db(DB_NAME)
         fuzzjobs = []
         with self.db.cursor() as c:
-            c.execute("SELECT ID, name, DBName from fuzzjob")
-            for id, name, db in c.fetchall():
-                self.debug(f"Found fuzzjob with ID {id} and name{name}")
-                fuzzjobs.append(Fuzzjob(id, name, db))
+            c.execute("SELECT ID, name from fuzzjob")
+            for id, name in c.fetchall():
+                self.debug(f"Found fuzzjob with ID {id} and name {name}")
+                fuzzjobs.append(Fuzzjob(self, id, name))
         return fuzzjobs
