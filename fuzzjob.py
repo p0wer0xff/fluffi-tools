@@ -30,7 +30,7 @@ class Fuzzjob:
             r = self.f.s.get(f"{fluffi.FLUFFI_URL}/progressArchiveFuzzjob")
             if "5/5" in r.text:
                 break
-            time.sleep(util.REQ_SLEEP_TIME)
+            time.sleep(util.SLEEP_TIME)
         log.debug(f"Fuzzjob {self.name} archived")
 
     def set_gre(self, gen, run, eva):

@@ -229,7 +229,7 @@ class Instance:
             r = s.get(f"{PM_URL}/project/1/history/{history_id}")
             if r.json()["status"] == "OK":
                 break
-            time.sleep(util.REQ_SLEEP_TIME)
+            time.sleep(util.SLEEP_TIME)
         log.debug("Manage agents success")
 
     ### DB ###
