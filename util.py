@@ -28,7 +28,7 @@ def get_ssh_addr(hostname):
 
 
 def get_sleep_time(sleep_time):
-    max(sleep_time * SLEEP_TIME_MULTIPLIER, SLEEP_TIME_MAX)
+    return min(sleep_time * SLEEP_TIME_MULTIPLIER, SLEEP_TIME_MAX)
 
 
 class FaultTolerantSession(requests.Session):
@@ -42,6 +42,7 @@ class FaultTolerantSession(requests.Session):
         self.proxies.update(proxies)
 
     def request(self, *args, **kwargs):
+        url = args[1]
         expect_str = kwargs.pop("expect_str", None)
         sleep_time = SLEEP_TIME
         while True:
@@ -49,19 +50,21 @@ class FaultTolerantSession(requests.Session):
                 try:
                     r = super().request(*args, **kwargs)
                 except Exception as e:
-                    log.warn(f"Request exception: {e}")
+                    log.warn(f"Request for '{url}' exception: {e}")
                 else:
                     if FLUFFI_DB_ERROR_STR in r.text:
-                        log.warn("Fluffi web DB connection failed")
+                        log.warn(f"Fluffi web DB connection failed for '{url}'")
                     elif not r.ok:
-                        log.warn(f"Request got status code {r.status_code}")
+                        log.warn(f"Request for '{url}' got status code {r.status_code}")
                     elif expect_str is not None and expect_str not in r.text:
-                        log.error(f"String '{expect_str}' not found in response")
+                        log.error(
+                            f"String '{expect_str}' not found in response for '{url}'"
+                        )
                     else:
                         return r
                 time.sleep(sleep_time)
-                sleep_time = get_sleep_time()
-            log.error(f"Request failed {REQ_TRIES} times, checking proxy")
+                sleep_time = get_sleep_time(sleep_time)
+            log.error(f"Request for '{url}' failed {REQ_TRIES} times, checking proxy")
             self.fluffi.check_proxy()
 
 
@@ -80,11 +83,13 @@ class FaultTolerantSSHAndSFTPClient:
         self.__close()
 
     def __close(self):
+        log.debug(f"Closing SSH/SFTP for {self.hostname}")
         try:
             self.sftp.close()
             self.ssh.close()
         except Exception as e:
             log.error(f"Error closing SSH/SFTP for {self.hostname}: {e}")
+        log.debug(f"SSH/SFTP closed for {self.hostname}")
 
     def __connect(self, reconnect=True):
         if reconnect:
@@ -101,19 +106,19 @@ class FaultTolerantSSHAndSFTPClient:
             except Exception as e:
                 log.error(f"Error connecting to SSH/SFTP for {self.hostname}: {e}")
             time.sleep(sleep_time)
-            sleep_time = get_sleep_time()
+            sleep_time = get_sleep_time(sleep_time)
         log.debug(f"Connected to SSH/SFTP for {self.hostname}")
 
-    def __sftp(self, func, *args, **kwargs):
+    def __sftp(self, func_name, *args, **kwargs):
         sleep_time = SLEEP_TIME
         while True:
             try:
-                return func(*args, **kwargs)
+                return getattr(self.sftp, func_name)(*args, **kwargs)
             except Exception as e:
                 log.error(f"SFTP error on {self.hostname}: {e}")
                 self.__connect()
             time.sleep(sleep_time)
-            sleep_time = get_sleep_time()
+            sleep_time = get_sleep_time(sleep_time)
 
     def exec_command(self, *args, **kwargs):
         check = kwargs.pop("check", False)
@@ -134,19 +139,25 @@ class FaultTolerantSSHAndSFTPClient:
                 else:
                     return stdin, stdout, stderr
             time.sleep(sleep_time)
-            sleep_time = get_sleep_time()
+            sleep_time = get_sleep_time(sleep_time)
 
     def get(self, *args, **kwargs):
-        return self.__sftp(self.sftp.get, *args, **kwargs)
+        return self.__sftp("get", *args, **kwargs)
 
     def put(self, *args, **kwargs):
-        return self.__sftp(self.sftp.put, *args, **kwargs)
+        return self.__sftp("put", *args, **kwargs)
 
 
 class FaultTolerantDBClient(pymysql.Connection):
     def __init__(self, *args, **kwargs):
+        kwargs["autocommit"] = True
         super().__init__(*args, **kwargs)
         self.__connect()
+
+    def __del__(self):
+        log.debug("Closing DB...")
+        self.close()
+        log.debug("DB closed")
 
     def __connect(self):
         log.debug("Connecting to DB...")
@@ -159,7 +170,7 @@ class FaultTolerantDBClient(pymysql.Connection):
             except Exception as e:
                 log.error(f"Error connecting to DB: {e}")
             time.sleep(sleep_time)
-            sleep_time = get_sleep_time()
+            sleep_time = get_sleep_time(sleep_time)
 
     def __query(self, func_name, query):
         sleep_time = SLEEP_TIME
@@ -172,7 +183,7 @@ class FaultTolerantDBClient(pymysql.Connection):
                 log.error(f"Error for query '{query}': {e}")
             self.__connect()
             time.sleep(sleep_time)
-            sleep_time = get_sleep_time()
+            sleep_time = get_sleep_time(sleep_time)
 
     def query_one(self, query):
         return self.__query("fetchone", query)

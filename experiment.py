@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import re
+import time
 
 import fluffi
 
@@ -13,6 +14,7 @@ N_MAX = 8
 EXP_BASE_DIR = os.path.expanduser("~/fluffi-tools/experiments/")
 FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench/")
 FUZZBENCH_DIR_REMOTE = "fuzzbench/"
+DUMP_FILENAME = "dump.sql.gz"
 SEED_SIZE_LIMIT = 1 * 1024 * 1024  # 1MB, from Fuzzbench
 NUM_TRIALS = 20
 
@@ -99,13 +101,12 @@ def main():
 
         # Iterate over number of trials
         for i in range(1, NUM_TRIALS + 1):
-            trial = i.zfill(2)
+            trial = str(i).zfill(2)
 
             # Check if trial already complete
             trial_dir = os.path.join(exp_benchmark_dir, trial)
-            if os.path.isdir(trial_dir) and any(
-                filename.endswith(".sql.gz") for filename in os.listdir(trial_dir)
-            ):
+            dump_path = os.path.join(trial_dir, DUMP_FILENAME)
+            if os.path.isfile(dump_path):
                 log.debug(
                     f"Trial {trial} for benchmark {benchmark} already complete, skipping"
                 )
@@ -115,7 +116,15 @@ def main():
 
             # Run the experiment
             run_name = re.sub("[^0-9a-zA-Z]+", "", f"{benchmark}{trial}")
-            inst.up(run_name, target_path_remote, module, seeds, library_path_remote)
+            fuzzjob = inst.up(
+                run_name, target_path_remote, module, seeds, library_path_remote
+            )
+
+            # Stop the experiment
+            time.sleep(30)
+            inst.down()
+            fuzzjob.get_dump(dump_path)
+            exit(0)
 
 
 if __name__ == "__main__":

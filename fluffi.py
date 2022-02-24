@@ -51,7 +51,7 @@ class Instance:
     ### High Level Functionality ###
 
     def deploy(self, clean=True):
-        log.info("Deploying...")
+        log.debug("Deploying...")
 
         # Clean old build
         if clean:
@@ -94,19 +94,20 @@ class Instance:
         )
         log.debug("New build transferred")
 
-        log.info("Deployed")
+        log.debug("Deployed")
 
     def up(self, name_prefix, target_path, module, seeds, library_path=None):
-        log.info("Starting...")
+        log.debug(f"Starting prefix {name_prefix}...")
         fuzzjob = self.new_fuzzjob(
             name_prefix, target_path, module, seeds, library_path
         )
         self.set_lm(1)
         fuzzjob.set_gre(2, 10, 10)
-        log.info("Started")
+        log.debug(f"Started prefix {name_prefix}")
+        return fuzzjob
 
     def down(self):
-        log.info("Stopping...")
+        log.debug("Stopping...")
         fuzzjobs = self.get_fuzzjobs()
         for fuzzjob in fuzzjobs:
             fuzzjob.set_gre(0, 0, 0)
@@ -115,7 +116,7 @@ class Instance:
         for fuzzjob in fuzzjobs:
             fuzzjob.archive()
         self.clear_dirs()
-        log.info("Stopped")
+        log.debug("Stopped")
 
     def all(self, name_prefix, target_path, module, seeds, library_path=None):
         self.down()
@@ -202,7 +203,7 @@ class Instance:
 
     def set_lm(self, num):
         log.debug(f"Setting LM to {num}...")
-        r = self.s.post(
+        self.s.post(
             f"{FLUFFI_URL}/systems/configureSystemInstances/{self.worker_name}",
             files={
                 "localManager_lm": (None, num),

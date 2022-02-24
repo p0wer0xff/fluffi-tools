@@ -6,6 +6,7 @@ import util
 
 # Constants
 DB_FUZZJOB_FMT = "fluffi_{}"
+DUMP_PATH_FMT = "/srv/fluffi/data/ftp/files/archive/{}.sql.gz"
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -16,7 +17,17 @@ class Fuzzjob:
         self.f = f
         self.id = id
         self.name = name
-        self.db = DB_FUZZJOB_FMT.format(name)
+        self.db = DB_FUZZJOB_FMT.format(self.name)
+        self.dump_path = DUMP_PATH_FMT.format(self.db)
+
+    ### SSH ###
+
+    def get_dump(self, local_path, clean=True):
+        log.debug(f"Retrieving dump for fuzzjob {self.name}...")
+        self.f.ssh_master.get(self.dump_path, local_path)
+        if clean:
+            self.f.ssh_master.exec_command(f"rm {self.dump_path}", check=True)
+        log.debug(f"Retrieved dump for fuzzjob {self.name}")
 
     ### Fluffi Web ###
 
@@ -35,7 +46,7 @@ class Fuzzjob:
 
     def set_gre(self, gen, run, eva):
         log.debug(f"Setting GRE to {gen}, {run}, {eva} for {self.name}...")
-        r = self.f.s.post(
+        self.f.s.post(
             f"{fluffi.FLUFFI_URL}/systems/configureFuzzjobInstances/{self.name}",
             files={
                 f"{self.f.worker_name}_tg": (None, gen),
