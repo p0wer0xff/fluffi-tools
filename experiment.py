@@ -25,8 +25,11 @@ log = logging.getLogger("fluffi")
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("name", type=str, help="clone, up, down, deploy, or all")
-    parser.add_argument("n", type=int, help=f"{N_MIN}-{N_MAX}")
+    parser.add_argument("name", type=str, help="experiment name")
+    parser.add_argument("n", type=int, help=f"server in range {N_MIN}-{N_MAX}")
+    parser.add_argument(
+        "-d", action="store_true", help="debug mode (more logs to stdout)"
+    )
     args = parser.parse_args()
 
     # Check host
@@ -40,9 +43,9 @@ def main():
     os.makedirs(exp_dir, exist_ok=True)
 
     # Setup logging
-    log.setLevel(logging.INFO)
+    log.setLevel(logging.DEBUG if args.d else logging.INFO)
     logging.basicConfig(
-        filename=os.path.join(exp_dir, "experiment.log"),
+        filename=None if args.d else os.path.join(exp_dir, "experiment.log"),
         format=f"%(asctime)s %(levelname)s:{location}:%(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
     )
