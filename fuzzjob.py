@@ -25,6 +25,7 @@ class Fuzzjob:
         self.f.s.post(
             f"{fluffi.FLUFFI_URL}/projects/archive/{self.id}", expect_str="Step 0/4"
         )
+        time.sleep(1)
         while True:
             r = self.f.s.get(f"{fluffi.FLUFFI_URL}/progressArchiveFuzzjob")
             if "5/5" in r.text:

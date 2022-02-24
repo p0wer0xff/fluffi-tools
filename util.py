@@ -10,7 +10,7 @@ import requests
 PROXY_PORT = 6969
 FLUFFI_DB_ERROR_STR = "Error: Database connection failed"
 REQ_SLEEP_TIME = 0.25
-REQ_TRIES = 5
+REQ_TRIES = 3
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -37,6 +37,7 @@ class FaultTolerantSession(requests.Session):
 
     def request(self, *args, **kwargs):
         expect_str = kwargs.pop("expect_str", None)
+        sleep_time = REQ_SLEEP_TIME
         while True:
             for _ in range(REQ_TRIES):
                 try:
@@ -52,7 +53,8 @@ class FaultTolerantSession(requests.Session):
                         log.error(f"String '{expect_str}' not found in response")
                     else:
                         return r
-                time.sleep(REQ_SLEEP_TIME)
+                time.sleep(sleep_time)
+                sleep_time *= 2
             log.error(f"Request failed {REQ_TRIES} times, checking proxy")
             self.fluffi.check_proxy()
 
@@ -81,6 +83,7 @@ class FaultTolerantSSHAndSFTPClient:
     def __connect(self, reconnect=True):
         if reconnect:
             self.__close()
+        sleep_time = REQ_SLEEP_TIME
         while True:
             log.debug(f"Connecting to SSH/SFTP for {self.hostname}...")
             try:
@@ -91,20 +94,24 @@ class FaultTolerantSSHAndSFTPClient:
                 break
             except Exception as e:
                 log.error(f"Error connecting to SSH/SFTP for {self.hostname}: {e}")
-            time.sleep(REQ_SLEEP_TIME)
+            time.sleep(sleep_time)
+            sleep_time *= 2
         log.debug(f"Connected to SSH/SFTP for {self.hostname}")
 
     def __sftp(self, func, *args, **kwargs):
+        sleep_time = REQ_SLEEP_TIME
         while True:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
                 log.error(f"SFTP error on {self.hostname}: {e}")
                 self.__connect()
-            time.sleep(REQ_SLEEP_TIME)
+            time.sleep(sleep_time)
+            sleep_time *= 2
 
     def exec_command(self, *args, **kwargs):
         check = kwargs.pop("check", False)
+        sleep_time = REQ_SLEEP_TIME
         while True:
             try:
                 stdin, stdout, stderr = self.ssh.exec_command(*args, **kwargs)
@@ -120,7 +127,8 @@ class FaultTolerantSSHAndSFTPClient:
                     )
                 else:
                     return stdin, stdout, stderr
-            time.sleep(REQ_SLEEP_TIME)
+            time.sleep(sleep_time)
+            sleep_time *= 2
 
     def get(self, *args, **kwargs):
         return self.__sftp(self.sftp.get, *args, **kwargs)
@@ -136,6 +144,7 @@ class FaultTolerantDBClient(pymysql.Connection):
 
     def __connect(self):
         log.debug("Connecting to DB...")
+        sleep_time = REQ_SLEEP_TIME
         while True:
             try:
                 super().ping()
@@ -143,9 +152,11 @@ class FaultTolerantDBClient(pymysql.Connection):
                 break
             except Exception as e:
                 log.error(f"Error connecting to DB: {e}")
-            time.sleep(REQ_SLEEP_TIME)
+            time.sleep(sleep_time)
+            sleep_time *= 2
 
     def __query(self, func_name, query):
+        sleep_time = REQ_SLEEP_TIME
         while True:
             try:
                 with self.cursor() as c:
@@ -154,7 +165,8 @@ class FaultTolerantDBClient(pymysql.Connection):
             except Exception as e:
                 log.error(f"Error for query '{query}': {e}")
             self.__connect()
-            time.sleep(REQ_SLEEP_TIME)
+            time.sleep(sleep_time)
+            sleep_time *= 2
 
     def query_one(self, query):
         return self.__query("fetchone", query)

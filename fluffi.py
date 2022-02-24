@@ -224,7 +224,7 @@ class Instance:
             expect_str="Started at inventory",
         )
         history_id = r.json()["history_id"]
-        time.sleep(1)
+        time.sleep(2)
         while True:
             r = s.get(f"{PM_URL}/project/1/history/{history_id}")
             if r.json()["status"] == "OK":
