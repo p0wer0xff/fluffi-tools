@@ -4,13 +4,11 @@ import socket
 import subprocess
 import time
 
-import pymysql
-
 import util
 from fuzzjob import Fuzzjob
 
 # Constants
-FLUFFI_PATH_FMT = os.path.expanduser("~/fluffi{}")
+FLUFFI_PATH_FMT = os.path.expanduser("~/fluffi{}/")
 LOCATION_FMT = "1021-{}"
 SSH_MASTER_FMT = "master{}"
 SSH_WORKER_FMT = "worker{}"
@@ -32,32 +30,23 @@ class Instance:
         self.fluffi_path = FLUFFI_PATH_FMT.format(self.n)
         self.location = LOCATION_FMT.format(self.n)
         self.worker_name = WORKER_NAME_FMT.format(self.n)
+        self.master_addr = util.get_ssh_addr(SSH_MASTER_FMT.format(self.n))
 
-        # Create SSH connections
-        self.ssh_master, self.sftp_master, self.master_addr = util.ssh_connect(
+        # Connect to SSH and DB
+        self.ssh_master = util.FaultTolerantSSHAndSFTPClient(
             SSH_MASTER_FMT.format(self.n)
         )
-        self.ssh_worker, self.sftp_worker, _ = util.ssh_connect(
+        self.ssh_worker = util.FaultTolerantSSHAndSFTPClient(
             SSH_WORKER_FMT.format(self.n)
         )
-
-        # Connect to DB
-        log.debug("Connecting to DB...")
-        self.db = pymysql.connect(host=self.master_addr, user=DB_NAME, password=DB_NAME)
-        log.debug("Connected to DB")
+        self.db = util.FaultTolerantDBClient(
+            host=self.master_addr, user=DB_NAME, password=DB_NAME
+        )
 
         # Check the proxy and initialize the session
         self.check_proxy()
         self.s = util.FaultTolerantSession(self)
         self.s.get(FLUFFI_URL)
-
-    # Close SSH and DB sessions on destruction
-    def __del__(self):
-        self.sftp_master.close()
-        self.sftp_worker.close()
-        self.ssh_master.close()
-        self.ssh_worker.close()
-        self.db.close()
 
     ### High Level Functionality ###
 
@@ -95,12 +84,13 @@ class Instance:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        self.sftp_worker.put(
+        self.ssh_worker.put(
             f"{self.fluffi_path}/core/x86-64/bin/fluffi.zip",
             f"/home/fluffi_linux_user/fluffi/persistent/{ARCH}/fluffi.zip",
         )
         self.ssh_worker.exec_command(
             "cd /home/fluffi_linux_user/fluffi/persistent/x64 && unzip -o fluffi.zip",
+            check=True,
         )
         log.debug("New build transferred")
 
@@ -149,12 +139,9 @@ class Instance:
 
         # Start proxy server
         log.debug("Starting proxy...")
-        _, stdout, stderr = self.ssh_master.exec_command(
-            f"ssh localhost -D 0.0.0.0:{util.PROXY_PORT} -N -f"
+        self.ssh_master.exec_command(
+            f"ssh localhost -D 0.0.0.0:{util.PROXY_PORT} -N -f", check=True
         )
-        if stdout.channel.recv_exit_status() != 0:
-            log.error(f"Error starting proxy: {stderr.read()}")
-            raise Exception("Error starting proxy")
         time.sleep(1)
         log.info(f"Started proxy")
         self.check_proxy()
@@ -206,30 +193,23 @@ class Instance:
                     (None, f"LD_LIBRARY_PATH={os.path.join(SUT_PATH, library_path)}"),
                 )
             )
-        while True:
-            r = self.s.post(f"{FLUFFI_URL}/projects/createProject", files=data)
-            if "Success" not in r.text:
-                log.error(f"Error creating new fuzzjob named {name}: {r.text}")
-                continue
-            break
+        r = self.s.post(
+            f"{FLUFFI_URL}/projects/createProject", files=data, expect_str="Success!"
+        )
         id = r.url.split("/view/")[1]
         log.debug(f"Fuzzjob named {name} created with ID {id}")
         return Fuzzjob(self, id, name)
 
     def set_lm(self, num):
         log.debug(f"Setting LM to {num}...")
-        while True:
-            r = self.s.post(
-                f"{FLUFFI_URL}/systems/configureSystemInstances/{self.worker_name}",
-                files={
-                    "localManager_lm": (None, num),
-                    "localManager_lm_arch": (None, ARCH),
-                },
-            )
-            if "Success!" not in r.text:
-                log.error(f"Error setting LM to {num}: {r.text}")
-                continue
-            break
+        r = self.s.post(
+            f"{FLUFFI_URL}/systems/configureSystemInstances/{self.worker_name}",
+            files={
+                "localManager_lm": (None, num),
+                "localManager_lm_arch": (None, ARCH),
+            },
+            expect_str="Success!",
+        )
         self.manage_agents()
         log.debug(f"LM set to {num}")
 
@@ -239,7 +219,10 @@ class Instance:
         log.debug("Starting manage agents task...")
         s = util.FaultTolerantSession(self)
         s.auth = ("admin", "admin")
-        r = s.post(f"{PM_URL}/project/1/periodic_task/3/execute/")
+        r = s.post(
+            f"{PM_URL}/project/1/periodic_task/3/execute/",
+            expect_str="Started at inventory",
+        )
         history_id = r.json()["history_id"]
         time.sleep(1)
         while True:
@@ -254,7 +237,7 @@ class Instance:
     def get_fuzzjobs(self):
         log.debug("Fetching fuzzjobs...")
         self.db.select_db(DB_NAME)
-        rows = util.db_query(self.db, "SELECT ID, name from fuzzjob")
+        rows = self.db.query_all("SELECT ID, name from fuzzjob")
         fuzzjobs = []
         for id, name in rows:
             log.debug(f"Found fuzzjob with ID {id} and name {name}")

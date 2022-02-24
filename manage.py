@@ -34,10 +34,10 @@ def main():
         exit(1)
 
     # Setup up args
-    with open(os.path.join(FUZZGOAT_PATH, "fuzzgoat", "rb")) as f:
+    with open(os.path.join(FUZZGOAT_PATH, "fuzzgoat"), "rb") as f:
         data = f.read()
     module = ("fuzzgoat", data)
-    with open(os.path.join(FUZZGOAT_PATH, "seed", "rb")) as f:
+    with open(os.path.join(FUZZGOAT_PATH, "seed"), "rb") as f:
         data = f.read()
     seeds = [("seed", data)]
     up_args = ["sears", "fuzzgoat/fuzzgoat", module, seeds]

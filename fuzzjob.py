@@ -22,7 +22,9 @@ class Fuzzjob:
 
     def archive(self):
         log.debug(f"Archiving fuzzjob {self.name}...")
-        self.f.s.post(f"{fluffi.FLUFFI_URL}/projects/archive/{self.id}")
+        self.f.s.post(
+            f"{fluffi.FLUFFI_URL}/projects/archive/{self.id}", expect_str="Step 0/4"
+        )
         while True:
             r = self.f.s.get(f"{fluffi.FLUFFI_URL}/progressArchiveFuzzjob")
             if "5/5" in r.text:
@@ -32,23 +34,17 @@ class Fuzzjob:
 
     def set_gre(self, gen, run, eva):
         log.debug(f"Setting GRE to {gen}, {run}, {eva} for {self.name}...")
-        while True:
-            r = self.f.s.post(
-                f"{fluffi.FLUFFI_URL}/systems/configureFuzzjobInstances/{self.name}",
-                files={
-                    f"{self.f.worker_name}_tg": (None, gen),
-                    f"{self.f.worker_name}_tg_arch": (None, fluffi.ARCH),
-                    f"{self.f.worker_name}_tr": (None, run),
-                    f"{self.f.worker_name}_tr_arch": (None, fluffi.ARCH),
-                    f"{self.f.worker_name}_te": (None, eva),
-                    f"{self.f.worker_name}_te_arch": (None, fluffi.ARCH),
-                },
-            )
-            if "Success!" not in r.text:
-                log.error(
-                    f"Error setting GRE to {gen}, {run}, {eva} for {self.name}: {r.text}"
-                )
-                continue
-            break
+        r = self.f.s.post(
+            f"{fluffi.FLUFFI_URL}/systems/configureFuzzjobInstances/{self.name}",
+            files={
+                f"{self.f.worker_name}_tg": (None, gen),
+                f"{self.f.worker_name}_tg_arch": (None, fluffi.ARCH),
+                f"{self.f.worker_name}_tr": (None, run),
+                f"{self.f.worker_name}_tr_arch": (None, fluffi.ARCH),
+                f"{self.f.worker_name}_te": (None, eva),
+                f"{self.f.worker_name}_te_arch": (None, fluffi.ARCH),
+            },
+            expect_str="Success!",
+        )
         self.f.manage_agents()
         log.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")

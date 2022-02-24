@@ -3,6 +3,7 @@ import os
 import time
 
 import paramiko
+import pymysql
 import requests
 
 # Constants
@@ -20,61 +21,143 @@ with open(os.path.expanduser("~/.ssh/config")) as f:
     ssh_config.parse(f)
 
 
-def ssh_connect(hostname):
-    log.debug(f"Connecting to {hostname} SSH server")
-    host_config = ssh_config.lookup(hostname)
-    host_config = {
-        "hostname": host_config["hostname"],
-        "username": host_config["user"],
-        "key_filename": host_config["identityfile"],
-    }
-    client = paramiko.SSHClient()
-    client.load_system_host_keys()
-    client.connect(**host_config)
-    log.debug(f"Connected to {hostname} SSH server")
-    return client, client.open_sftp(), host_config["hostname"]
-
-# Fault tolerant DB query
-def db_query(db, query):
-    while True:
-        try:
-            with db.cursor() as c:
-                c.execute(query)
-                return c.fetchall()
-        except Exception as e:
-            log.error(f"Error for query {query}: {e}")
-        db.ping(reconnect=True)
-        time.sleep(REQ_SLEEP_TIME)
+def get_ssh_addr(hostname):
+    return ssh_config.lookup(hostname)["hostname"]
 
 
 class FaultTolerantSession(requests.Session):
     def __init__(self, fluffi, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fluffi = fluffi
-
-        # Use SSH proxy server
         proxies = {
             "http": f"socks5h://{fluffi.master_addr}:{PROXY_PORT}",
             "https": f"socks5h://{fluffi.master_addr}:{PROXY_PORT}",
         }
         self.proxies.update(proxies)
 
-    # Perform fault tolerant requests
     def request(self, *args, **kwargs):
-        for _ in range(REQ_TRIES):
-            try:
-                r = super().request(*args, **kwargs)
-            except Exception as e:
-                log.warn(f"Request exception: {e}")
+        expect_str = kwargs.pop("expect_str", None)
+        while True:
+            for _ in range(REQ_TRIES):
+                try:
+                    r = super().request(*args, **kwargs)
+                except Exception as e:
+                    log.warn(f"Request exception: {e}")
+                else:
+                    if FLUFFI_DB_ERROR_STR in r.text:
+                        log.warn("Fluffi web DB connection failed")
+                    elif not r.ok:
+                        log.warn(f"Request got status code {r.status_code}")
+                    elif expect_str is not None and expect_str not in r.text:
+                        log.error(f"String '{expect_str}' not found in response")
+                    else:
+                        return r
                 time.sleep(REQ_SLEEP_TIME)
-                continue
-            if FLUFFI_DB_ERROR_STR in r.text:
-                log.warn("Fluffi web DB connection failed")
-            elif not r.ok:
-                log.warn(f"Request got status code {r.status_code}")
-            else:
-                return r
+            log.error(f"Request failed {REQ_TRIES} times, checking proxy")
+            self.fluffi.check_proxy()
+
+
+class FaultTolerantSSHAndSFTPClient:
+    def __init__(self, hostname):
+        self.hostname = hostname
+        host_config = ssh_config.lookup(self.hostname)
+        self.host_config = {
+            "hostname": host_config["hostname"],
+            "username": host_config["user"],
+            "key_filename": host_config["identityfile"],
+        }
+        self.__connect(False)
+
+    def __del__(self):
+        self.__close()
+
+    def __close(self):
+        try:
+            self.sftp.close()
+            self.ssh.close()
+        except Exception as e:
+            log.error(f"Error closing SSH/SFTP for {self.hostname}: {e}")
+
+    def __connect(self, reconnect=True):
+        if reconnect:
+            self.__close()
+        while True:
+            log.debug(f"Connecting to SSH/SFTP for {self.hostname}...")
+            try:
+                self.ssh = paramiko.SSHClient()
+                self.ssh.load_system_host_keys()
+                self.ssh.connect(**self.host_config)
+                self.sftp = self.ssh.open_sftp()
+                break
+            except Exception as e:
+                log.error(f"Error connecting to SSH/SFTP for {self.hostname}: {e}")
             time.sleep(REQ_SLEEP_TIME)
-        log.error(f"Request failed {REQ_TRIES} times, checking proxy")
-        self.fluffi.check_proxy()
-        self.request(*args, **kwargs)
+        log.debug(f"Connected to SSH/SFTP for {self.hostname}")
+
+    def __sftp(self, func, *args, **kwargs):
+        while True:
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                log.error(f"SFTP error on {self.hostname}: {e}")
+                self.__connect()
+            time.sleep(REQ_SLEEP_TIME)
+
+    def exec_command(self, *args, **kwargs):
+        check = kwargs.pop("check", False)
+        while True:
+            try:
+                stdin, stdout, stderr = self.ssh.exec_command(*args, **kwargs)
+            except Exception as e:
+                log.error(
+                    f"Error executing {self.hostname} SSH command '{args[0]}': {e}"
+                )
+                self.__connect()
+            else:
+                if check and stdout.channel.recv_exit_status() != 0:
+                    log.error(
+                        f"Error executing {self.hostname} SSH command '{args[0]}': {stdout.read()}"
+                    )
+                else:
+                    return stdin, stdout, stderr
+            time.sleep(REQ_SLEEP_TIME)
+
+    def get(self, *args, **kwargs):
+        return self.__sftp(self.sftp.get, *args, **kwargs)
+
+    def put(self, *args, **kwargs):
+        return self.__sftp(self.sftp.put, *args, **kwargs)
+
+
+class FaultTolerantDBClient(pymysql.Connection):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__connect()
+
+    def __connect(self):
+        log.debug("Connecting to DB...")
+        while True:
+            try:
+                super().ping()
+                log.debug("Connected to DB")
+                break
+            except Exception as e:
+                log.error(f"Error connecting to DB: {e}")
+            time.sleep(REQ_SLEEP_TIME)
+
+    def __query(self, func_name, query):
+        while True:
+            try:
+                with self.cursor() as c:
+                    c.execute(query)
+                    return getattr(c, func_name)()
+            except Exception as e:
+                log.error(f"Error for query '{query}': {e}")
+            self.__connect()
+            time.sleep(REQ_SLEEP_TIME)
+
+    def query_one(self, query):
+        return self.__query("fetchone", query)
+
+    def query_all(self, query):
+        return self.__query("fetchall", query)

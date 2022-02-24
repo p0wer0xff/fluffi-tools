@@ -10,8 +10,8 @@ import fluffi
 # Constants
 N_MIN = 5
 N_MAX = 8
-EXP_BASE_DIR = os.path.expanduser("~/fluffi-tools/experiments")
-FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench")
+EXP_BASE_DIR = os.path.expanduser("~/fluffi-tools/experiments/")
+FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench/")
 FUZZBENCH_DIR_REMOTE = "fuzzbench/"
 SEED_SIZE_LIMIT = 1 * 1024 * 1024  # 1MB, from Fuzzbench
 NUM_TRIALS = 20
