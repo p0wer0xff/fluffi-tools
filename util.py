@@ -134,7 +134,7 @@ class FaultTolerantSSHAndSFTPClient:
             else:
                 if check and stdout.channel.recv_exit_status() != 0:
                     log.error(
-                        f"Error executing {self.hostname} SSH command '{args[0]}': {stdout.read()}"
+                        f"Error executing {self.hostname} SSH command '{args[0]}': {stderr.read()}"
                     )
                 else:
                     return stdin, stdout, stderr

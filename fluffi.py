@@ -197,7 +197,7 @@ class Instance:
         r = self.s.post(
             f"{FLUFFI_URL}/projects/createProject", files=data, expect_str="Success!"
         )
-        id = r.url.split("/view/")[1]
+        id = int(r.url.split("/view/")[1])
         log.debug(f"Fuzzjob named {name} created with ID {id}")
         return Fuzzjob(self, id, name)
 
@@ -238,7 +238,7 @@ class Instance:
     def get_fuzzjobs(self):
         log.debug("Fetching fuzzjobs...")
         self.db.select_db(DB_NAME)
-        rows = self.db.query_all("SELECT ID, name from fuzzjob")
+        rows = self.db.query_all("SELECT ID, name FROM fuzzjob")
         fuzzjobs = []
         for id, name in rows:
             log.debug(f"Found fuzzjob with ID {id} and name {name}")

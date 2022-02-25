@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 
 import fluffi
@@ -17,8 +18,8 @@ class Fuzzjob:
         self.f = f
         self.id = id
         self.name = name
-        self.db = DB_FUZZJOB_FMT.format(self.name)
-        self.dump_path = DUMP_PATH_FMT.format(self.db)
+        self.db_name = DB_FUZZJOB_FMT.format(self.name)
+        self.dump_path = DUMP_PATH_FMT.format(self.db_name)
 
     ### SSH ###
 
@@ -60,3 +61,54 @@ class Fuzzjob:
         )
         self.f.manage_agents()
         log.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")
+
+    ### Data ###
+
+    def get_stats(self):
+        log.debug(f"Getting stats for {self.name}...")
+        d = {}
+
+        # Get CPU time
+        _, stdout, _ = self.f.ssh_worker.exec_command(
+            f"ps --cumulative -ax | grep {self.f.location} | grep -v grep | awk '{{print $4}}'",
+            check=True,
+        )
+        d["cpu_time"] = 0
+        for line in stdout.read().decode().split("\n"):
+            if ":" not in line:
+                continue
+            mins, secs = map(int, line.split(":"))
+            d["cpu_time"] += (mins * 60) + secs
+
+        # Get stats from Fluffi web
+        while True:
+            r = self.f.s.get(
+                f"{fluffi.FLUFFI_URL}/projects/view/{self.id}",
+                expect_str="General Information",
+            )
+            matches = re.findall(r'<td style="text-align: center;">(.+)</td>', r.text)
+            try:
+                d["completed_testcases"] = int(matches[0])
+                d["population"] = int(matches[1].split(" /")[0])
+                d["access_violations_total"] = int(matches[2])
+                d["access_violations_unique"] = int(matches[3])
+                d["crashes_total"] = int(matches[4])
+                d["crashes_unique"] = int(matches[5])
+                d["hangs"] = int(matches[6])
+                d["no_response"] = int(matches[7])
+                d["covered_blocks"] = int(matches[8])
+                d["active_lm"] = int(matches[9])
+                d["active_run"] = int(matches[11])
+                d["active_eva"] = int(matches[12])
+                d["active_gen"] = int(matches[13])
+                break
+            except Exception as e:
+                log.error(f"Error getting stats for {self.name}: {e}")
+                time.sleep(util.SLEEP_TIME)
+
+        # Get number of paths
+        # self.f.db.select_db(self.db_name)
+        # d["paths"] = self.f.db.query_one("SELECT COUNT(*) FROM edge_coverage")[0]
+
+        log.debug(f"Got stats for {self.name}")
+        return d

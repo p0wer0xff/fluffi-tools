@@ -6,6 +6,8 @@ import os
 import re
 import time
 
+import pandas as pd
+
 import fluffi
 
 # Constants
@@ -14,9 +16,12 @@ N_MAX = 8
 EXP_BASE_DIR = os.path.expanduser("~/fluffi-tools/experiments/")
 FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench/")
 FUZZBENCH_DIR_REMOTE = "fuzzbench/"
-DUMP_FILENAME = "dump.sql.gz"
+DUMP_FMT = "{}.sql.gz"
+DATA_FMT = "{}.parquet"
 SEED_SIZE_LIMIT = 1 * 1024 * 1024  # 1MB, from Fuzzbench
 NUM_TRIALS = 20
+TRIAL_TIME = 24 * 60 * 60  # 24 hours
+STATS_TIME = 20.0
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -107,26 +112,44 @@ def main():
             trial = str(i).zfill(2)
 
             # Check if trial already complete
-            trial_dir = os.path.join(exp_benchmark_dir, trial)
-            dump_path = os.path.join(trial_dir, DUMP_FILENAME)
-            if os.path.isfile(dump_path):
+            data_path = os.path.join(exp_benchmark_dir, DATA_FMT.format(trial))
+            dump_path = os.path.join(exp_benchmark_dir, DUMP_FMT.format(trial))
+            if os.path.isfile(data_path) and os.path.isfile(dump_path):
                 log.debug(
                     f"Trial {trial} for benchmark {benchmark} already complete, skipping"
                 )
                 continue
-            os.makedirs(trial_dir, exist_ok=True)
+            try:
+                os.remove(data_path)
+            except OSError:
+                pass
+            try:
+                os.remove(dump_path)
+            except OSError:
+                pass
+
+            # Start the experiment
             log.info(f"On trial {trial} for benchmark {benchmark}")
-
-            # Run the experiment
             run_name = re.sub("[^0-9a-zA-Z]+", "", f"{benchmark}{trial}")
-            fuzzjob = inst.up(
-                run_name, target_path_remote, module, seeds, library_path_remote
-            )
+            fuzzjob = inst.up(run_name, target_path_remote, module, seeds)
+            df = pd.DataFrame()
+            real_time_start = time.time()
 
-            # Stop the experiment
-            time.sleep(30)
+            # Collect stats
+            # TODO: check for zombie/decreasing cpu time
+            while True:
+                time.sleep(STATS_TIME - (time.time() - real_time_start) % STATS_TIME)
+                row = fuzzjob.get_stats()
+                row["real_time"] = time.time() - real_time_start
+                df = df.append(row, ignore_index=True)
+                log.debug(f"CPU minutes: {row['cpu_time'] / 60}")
+                if row["cpu_time"] >= TRIAL_TIME:
+                    break
+
+            # Bring down and dump data
             inst.down()
             fuzzjob.get_dump(dump_path)
+            df.to_parquet(data_path)
             exit(0)
 
 
