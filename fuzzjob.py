@@ -107,8 +107,9 @@ class Fuzzjob:
                 time.sleep(util.SLEEP_TIME)
 
         # Get number of paths
-        # self.f.db.select_db(self.db_name)
-        # d["paths"] = self.f.db.query_one("SELECT COUNT(*) FROM edge_coverage")[0]
+        # d["paths"] = self.f.db.query_one(
+        #     "SELECT COUNT(*) FROM edge_coverage", self.db_name
+        # )[0]
 
         log.debug(f"Got stats for {self.name}")
         return d

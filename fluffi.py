@@ -237,8 +237,7 @@ class Instance:
 
     def get_fuzzjobs(self):
         log.debug("Fetching fuzzjobs...")
-        self.db.select_db(DB_NAME)
-        rows = self.db.query_all("SELECT ID, name FROM fuzzjob")
+        rows = self.db.query_all("SELECT ID, name FROM fuzzjob", DB_NAME)
         fuzzjobs = []
         for id, name in rows:
             log.debug(f"Found fuzzjob with ID {id} and name {name}")

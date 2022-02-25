@@ -172,10 +172,11 @@ class FaultTolerantDBClient(pymysql.Connection):
             time.sleep(sleep_time)
             sleep_time = get_sleep_time(sleep_time)
 
-    def __query(self, func_name, query):
+    def __query(self, func_name, query, db_name):
         sleep_time = SLEEP_TIME
         while True:
             try:
+                self.select_db(db_name)
                 with self.cursor() as c:
                     c.execute(query)
                     return getattr(c, func_name)()
@@ -185,8 +186,8 @@ class FaultTolerantDBClient(pymysql.Connection):
             time.sleep(sleep_time)
             sleep_time = get_sleep_time(sleep_time)
 
-    def query_one(self, query):
-        return self.__query("fetchone", query)
+    def query_one(self, query, db_name):
+        return self.__query("fetchone", query, db_name)
 
-    def query_all(self, query):
-        return self.__query("fetchall", query)
+    def query_all(self, query, db_name):
+        return self.__query("fetchall", query, db_name)
