@@ -20,8 +20,9 @@ DUMP_FMT = "{}.sql.gz"
 DATA_FMT = "{}.parquet"
 SEED_SIZE_LIMIT = 1 * 1024 * 1024  # 1MB, from Fuzzbench
 NUM_TRIALS = 20
-TRIAL_TIME = 24 * 60 * 60  # 24 hours
-STATS_TIME = 20.0
+CHECK_CPU_TIME_INTERVAL = 10.0  # 10 seconds in real time
+GET_STATS_INTERVAL = 10 * 60  # 10 minutes in CPU time
+TRIAL_TIME = 24 * 60 * 60  # 24 hours in CPU time
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -132,19 +133,23 @@ def main():
             log.info(f"On trial {trial} for benchmark {benchmark}")
             run_name = re.sub("[^0-9a-zA-Z]+", "", f"{benchmark}{trial}")
             fuzzjob = inst.up(run_name, target_path_remote, module, seeds)
-            df = pd.DataFrame()
-            real_time_start = time.time()
 
             # Collect stats
-            # TODO: check for zombie/decreasing cpu time
-            while True:
-                time.sleep(STATS_TIME - (time.time() - real_time_start) % STATS_TIME)
-                row = fuzzjob.get_stats()
-                row["real_time"] = time.time() - real_time_start
-                df = df.append(row, ignore_index=True)
-                log.debug(f"CPU minutes: {row['cpu_time'] / 60}")
-                if row["cpu_time"] >= TRIAL_TIME:
-                    break
+            df = pd.DataFrame()
+            real_time_start = time.time()
+            cpu_time_prev = 0
+            while cpu_time_prev < TRIAL_TIME:
+                time.sleep(
+                    CHECK_CPU_TIME_INTERVAL
+                    - (time.time() - real_time_start) % CHECK_CPU_TIME_INTERVAL
+                )
+                cpu_time = inst.get_cpu_time()
+                if (cpu_time - cpu_time_prev) >= GET_STATS_INTERVAL:
+                    row = fuzzjob.get_stats()
+                    row["cpu_time"] = cpu_time
+                    row["real_time"] = time.time() - real_time_start
+                    df = df.append(row, ignore_index=True)
+                    cpu_time_prev = cpu_time
 
             # Bring down and dump data
             inst.down()

@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import socket
 import subprocess
 import time
@@ -34,6 +35,8 @@ class Instance:
         self.location = LOCATION_FMT.format(self.n)
         self.worker_name = WORKER_NAME_FMT.format(self.n)
         self.master_addr = util.get_ssh_addr(SSH_MASTER_FMT.format(self.n))
+        self.pid_cpu_time = {}
+        self.dead_cpu_time = 0
 
         # Connect to SSH and DB
         self.ssh_master = util.FaultTolerantSSHAndSFTPClient(
@@ -151,17 +154,37 @@ class Instance:
 
     def kill_leftover_agents(self):
         log.debug("Killing leftover agents...")
-        self.ssh_worker.exec_command(
-            f"pkill -f '/home/fluffi_linux_user/fluffi/persistent/{ARCH}/'",
-        )
+        self.ssh_worker.exec_command(f"pkill -f '{FLUFFI_ARCH_DIR}'")
         log.debug("Killed leftover agents")
 
     def clear_dirs(self):
         log.debug("Deleting log/testcase directories...")
         self.ssh_worker.exec_command(
-            "rm -rf /home/fluffi_linux_user/fluffi/persistent/x64/logs /home/fluffi_linux_user/fluffi/persistent/x64/testcaseFiles"
+            f"rm -rf {os.path.join(FLUFFI_ARCH_DIR, 'log/')} {os.path.join(FLUFFI_ARCH_DIR, 'testcaseFiles')}"
         )
         log.debug("Log/testcase directories deleted")
+
+    def get_cpu_time(self):
+        log.debug("Getting CPU time...")
+        _, stdout, _ = self.ssh_worker.exec_command(
+            f"ps --cumulative -ax | grep {self.location} | grep -v grep | awk '{{print $1, $4}}'",
+            check=True,
+        )
+        cpu_time_total = 0
+        pid_cpu_time = {}
+        for match in re.findall(r"(\d+) (\d+):(\d+)", stdout.read().decode()):
+            pid, mins, secs = map(int, match)
+            pid_cpu_time[pid] = (mins * 60) + secs
+            cpu_time_total += pid_cpu_time[pid]
+        log.debug(f"{len(pid_cpu_time) // 2} agents are running")
+        for pid, cpu_time in self.pid_cpu_time.items():
+            if pid not in pid_cpu_time:
+                log.debug(f"Dead PID {pid}, adding its time of {cpu_time}")
+                self.dead_cpu_time += cpu_time
+        cpu_time_total += self.dead_cpu_time
+        self.pid_cpu_time = pid_cpu_time
+        log.debug(f"Got CPU time of {cpu_time_total / 60:.2f} minutes")
+        return cpu_time_total
 
     ### Fluffi Web ###
 
