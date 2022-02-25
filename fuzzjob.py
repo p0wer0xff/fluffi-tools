@@ -90,30 +90,30 @@ class Fuzzjob:
         self.pid_cpu_time = pid_cpu_time
 
         # Get stats from Fluffi web
-        while True:
-            r = self.f.s.get(
-                f"{fluffi.FLUFFI_URL}/projects/view/{self.id}",
-                expect_str="General Information",
-            )
-            matches = re.findall(r'<td style="text-align: center;">(.+)</td>', r.text)
-            try:
-                d["completed_testcases"] = int(matches[0])
-                d["population"] = int(matches[1].split(" /")[0])
-                d["access_violations_total"] = int(matches[2])
-                d["access_violations_unique"] = int(matches[3])
-                d["crashes_total"] = int(matches[4])
-                d["crashes_unique"] = int(matches[5])
-                d["hangs"] = int(matches[6])
-                d["no_response"] = int(matches[7])
-                d["covered_blocks"] = int(matches[8])
-                d["active_lm"] = int(matches[9])
-                d["active_run"] = int(matches[11])
-                d["active_eva"] = int(matches[12])
-                d["active_gen"] = int(matches[13])
-                break
-            except Exception as e:
-                log.error(f"Error getting stats for {self.name}: {e}")
-                time.sleep(util.SLEEP_TIME)
+        r = self.f.s.get(
+            f"{fluffi.FLUFFI_URL}/projects/view/{self.id}",
+            expect_str="General Information",
+        )
+        matches = re.findall(r'<td style="text-align: center;">(.+)</td>', r.text)
+        d["completed_testcases"] = int(matches[0])
+        d["population"] = int(matches[1].split(" /")[0])
+        d["access_violations_total"] = int(matches[2])
+        d["access_violations_unique"] = int(matches[3])
+        d["crashes_total"] = int(matches[4])
+        d["crashes_unique"] = int(matches[5])
+        d["hangs"] = int(matches[6])
+        d["no_response"] = int(matches[7])
+        d["covered_blocks"] = int(matches[8])
+        d["active_lm"] = int(matches[9])
+        try:
+            d["active_run"] = int(matches[11])
+            d["active_eva"] = int(matches[12])
+            d["active_gen"] = int(matches[13])
+        except:
+            log.warn(f"Could not get active agents for {self.name}")
+            d["active_run"] = 0
+            d["active_eva"] = 0
+            d["active_gen"] = 0
 
         # Get number of paths
         # d["paths"] = self.f.db.query_one(
