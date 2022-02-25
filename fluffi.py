@@ -101,10 +101,18 @@ class Instance:
 
         log.debug("Deployed")
 
-    def up(self, name_prefix, target_path, module, seeds, library_path=None):
+    def up(
+        self,
+        name_prefix,
+        target_path,
+        module,
+        seeds,
+        library_path=None,
+        linker_path=None,
+    ):
         log.debug(f"Starting fuzzjob with prefix {name_prefix}...")
         fuzzjob = self.new_fuzzjob(
-            name_prefix, target_path, module, seeds, library_path
+            name_prefix, target_path, module, seeds, library_path, linker_path
         )
         self.set_lm(1)
         fuzzjob.set_gre(2, 10, 10)
@@ -188,21 +196,32 @@ class Instance:
 
     ### Fluffi Web ###
 
-    def new_fuzzjob(self, name_prefix, target_path, module, seeds, library_path=None):
+    def new_fuzzjob(
+        self,
+        name_prefix,
+        target_path,
+        module,
+        seeds,
+        library_path=None,
+        linker_path=None,
+    ):
         name = f"{name_prefix}{int(time.time())}"
         log.debug(f"Creating new fuzzjob named {name}...")
+        cmd = os.path.join(SUT_PATH, target_path)
+        if library_path is not None and linker_path is not None:
+            cmd = f"{os.path.join(SUT_PATH, linker_path)} --library-path {os.path.join(SUT_PATH, library_path)} {cmd}"
         data = [
             ("name", (None, name)),
             ("subtype", (None, "X64_Lin_DynRioSingle")),
-            ("generatorTypes", (None, 100)),  # RadamsaMutator
-            ("generatorTypes", (None, 0)),  # AFLMutator
+            ("generatorTypes", (None, 0)),  # RadamsaMutator
+            ("generatorTypes", (None, 100)),  # AFLMutator
             ("generatorTypes", (None, 0)),  # CaRRoTMutator
             ("generatorTypes", (None, 0)),  # HonggfuzzMutator
             ("generatorTypes", (None, 0)),  # OedipusMutator
             ("generatorTypes", (None, 0)),  # ExternalMutator
             ("evaluatorTypes", (None, 100)),  # CoverageEvaluator
             ("location", (None, self.location)),
-            ("targetCMDLine", (None, os.path.join(SUT_PATH, target_path))),
+            ("targetCMDLine", (None, cmd)),
             ("option_module", (None, "hangeTimeout")),
             ("option_module_value", (None, 5000)),
             ("targetModulesOnCreate", module),
@@ -211,14 +230,6 @@ class Instance:
         ]
         for seed in seeds:
             data.append(("filename", seed))
-        if library_path is not None:
-            data.append(("option_module", (None, "additionalEnvParam")))
-            data.append(
-                (
-                    "option_module_value",
-                    (None, f"LD_LIBRARY_PATH={os.path.join(SUT_PATH, library_path)}"),
-                )
-            )
         r = self.s.post(
             f"{FLUFFI_URL}/projects/createProject", files=data, expect_str="Success!"
         )

@@ -83,6 +83,9 @@ def main():
         library_path_remote = os.path.join(
             FUZZBENCH_DIR_REMOTE, benchmark, "shared_libs/"
         )
+        linker_path_remote = os.path.join(
+            FUZZBENCH_DIR_REMOTE, benchmark, "ld-linux-x86-64.so.2"
+        )
 
         # Read the seeds
         seeds_path = os.path.join(benchmark_dir, "seeds/")
@@ -132,7 +135,14 @@ def main():
             # Start the experiment
             log.info(f"On trial {trial} for benchmark {benchmark}")
             run_name = re.sub("[^0-9a-zA-Z]+", "", f"{benchmark}{trial}")
-            fuzzjob = inst.up(run_name, target_path_remote, module, seeds)
+            fuzzjob = inst.up(
+                run_name,
+                target_path_remote,
+                module,
+                seeds,
+                library_path_remote,
+                linker_path_remote,
+            )
 
             # Collect stats
             df = pd.DataFrame()
