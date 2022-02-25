@@ -20,6 +20,8 @@ class Fuzzjob:
         self.name = name
         self.db_name = DB_FUZZJOB_FMT.format(self.name)
         self.dump_path = DUMP_PATH_FMT.format(self.db_name)
+        self.pid_cpu_time = {}
+        self.dead_cpu_time = 0
 
     ### SSH ###
 
@@ -70,15 +72,22 @@ class Fuzzjob:
 
         # Get CPU time
         _, stdout, _ = self.f.ssh_worker.exec_command(
-            f"ps --cumulative -ax | grep {self.f.location} | grep -v grep | awk '{{print $4}}'",
+            f"ps --cumulative -ax | grep {self.f.location} | grep -v grep | awk '{{print $1, $4}}'",
             check=True,
         )
         d["cpu_time"] = 0
-        for line in stdout.read().decode().split("\n"):
-            if ":" not in line:
-                continue
-            mins, secs = map(int, line.split(":"))
-            d["cpu_time"] += (mins * 60) + secs
+        pid_cpu_time = {}
+        for match in re.findall(r"(\d+) (\d+):(\d+)", stdout.read().decode()):
+            pid, mins, secs = map(int, match)
+            pid_cpu_time[pid] = (mins * 60) + secs
+            d["cpu_time"] += pid_cpu_time[pid]
+        log.debug(f"{len(pid_cpu_time) // 2} agents are running")
+        for pid, cpu_time in self.pid_cpu_time.items():
+            if pid not in pid_cpu_time:
+                log.debug(f"Dead PID {pid}, adding its time of {cpu_time}")
+                self.dead_cpu_time += cpu_time
+        d["cpu_time"] += self.dead_cpu_time
+        self.pid_cpu_time = pid_cpu_time
 
         # Get stats from Fluffi web
         while True:
