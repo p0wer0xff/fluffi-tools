@@ -14,7 +14,10 @@ SSH_MASTER_FMT = "master{}"
 SSH_WORKER_FMT = "worker{}"
 WORKER_NAME_FMT = "fluffi-1021-{}-Linux1"
 ARCH = "x64"
-SUT_PATH = "/home/fluffi_linux_user/fluffi/persistent/SUT/"
+DEPLOY_ZIP_NAME = "fluffi.zip"
+FLUFFI_DIR = "/home/fluffi_linux_user/fluffi/persistent/"
+FLUFFI_ARCH_DIR = os.path.join(FLUFFI_DIR, ARCH)
+SUT_PATH = os.path.join(FLUFFI_DIR, "SUT/")
 FLUFFI_URL = "http://web.fluffi:8880"
 PM_URL = "http://pole.fluffi:8888/api/v2"
 DB_NAME = "fluffi_gm"
@@ -57,7 +60,7 @@ class Instance:
         if clean:
             log.debug("Cleaning old build...")
             subprocess.run(
-                ["rm", "-rf", f"{self.fluffi_path}/core/x86-64"],
+                ["rm", "-rf", os.path.join(self.fluffi_path, "core/x86-64/")],
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -68,7 +71,7 @@ class Instance:
         log.debug("Compiling new build...")
         subprocess.run(
             ["sudo", "./buildAll.sh"],
-            cwd=f"{self.fluffi_path}/build/ubuntu_based",
+            cwd=os.path.join(self.fluffi_path, "build/ubuntu_based/"),
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -78,32 +81,31 @@ class Instance:
         # Zip, SCP, and unzip
         log.debug("Transferring new build...")
         subprocess.run(
-            ["zip", "-r", "fluffi.zip", "."],
-            cwd=f"{self.fluffi_path}/core/x86-64/bin",
+            ["zip", "-r", DEPLOY_ZIP_NAME, "."],
+            cwd=os.path.join(self.fluffi_path, "core/x86-64/bin/"),
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         self.ssh_worker.put(
-            f"{self.fluffi_path}/core/x86-64/bin/fluffi.zip",
-            f"/home/fluffi_linux_user/fluffi/persistent/{ARCH}/fluffi.zip",
+            os.path.join(self.fluffi_path, "core/x86-64/bin/", DEPLOY_ZIP_NAME),
+            os.path.join(FLUFFI_ARCH_DIR, DEPLOY_ZIP_NAME),
         )
         self.ssh_worker.exec_command(
-            "cd /home/fluffi_linux_user/fluffi/persistent/x64 && unzip -o fluffi.zip",
-            check=True,
+            f"cd {FLUFFI_ARCH_DIR} && unzip -o {DEPLOY_ZIP_NAME}", check=True
         )
         log.debug("New build transferred")
 
         log.debug("Deployed")
 
     def up(self, name_prefix, target_path, module, seeds, library_path=None):
-        log.debug(f"Starting prefix {name_prefix}...")
+        log.debug(f"Starting fuzzjob with prefix {name_prefix}...")
         fuzzjob = self.new_fuzzjob(
             name_prefix, target_path, module, seeds, library_path
         )
         self.set_lm(1)
         fuzzjob.set_gre(2, 10, 10)
-        log.debug(f"Started prefix {name_prefix}")
+        log.debug(f"Started fuzzjob named {fuzzjob.name}")
         return fuzzjob
 
     def down(self):
