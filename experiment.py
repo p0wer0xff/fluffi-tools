@@ -14,11 +14,10 @@ import fluffi
 N_MIN = 5
 N_MAX = 8
 EXP_BASE_DIR = os.path.expanduser("~/fluffi-tools/experiments/")
-FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench/")
+FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench_out/")
 FUZZBENCH_DIR_REMOTE = "fuzzbench/"
 DUMP_FMT = "{}.sql.gz"
 DATA_FMT = "{}.parquet"
-SEED_SIZE_LIMIT = 1 * 1024 * 1024  # 1MB, from Fuzzbench
 NUM_TRIALS = 20
 CHECK_CPU_TIME_INTERVAL = 10.0  # 10 seconds in real time
 GET_STATS_INTERVAL = 10 * 60  # 10 minutes in CPU time
@@ -70,19 +69,14 @@ def main():
 
         # Read the target
         with open(os.path.join(benchmark_dir, "target.txt")) as f:
-            target_name = f.read()
+            target_name = f.read().strip()
         target_path = os.path.join(benchmark_dir, target_name)
-        if not os.path.isfile(target_path):
-            log.error(f"Benchmark {benchmark} has bad target")
-            exit(1)
         log.debug(f"Benchmark {benchmark} has target {target_name}")
         with open(target_path, "rb") as f:
             data = f.read()
         module = (target_name, data)
         target_path_remote = os.path.join(FUZZBENCH_DIR_REMOTE, benchmark, target_name)
-        library_path_remote = os.path.join(
-            FUZZBENCH_DIR_REMOTE, benchmark, "shared_libs/"
-        )
+        library_path_remote = os.path.join(FUZZBENCH_DIR_REMOTE, benchmark, "lib/")
         linker_path_remote = os.path.join(
             FUZZBENCH_DIR_REMOTE, benchmark, "ld-linux-x86-64.so.2"
         )
@@ -90,21 +84,11 @@ def main():
         # Read the seeds
         seeds_path = os.path.join(benchmark_dir, "seeds/")
         seeds = []
-        if os.path.isdir(seeds_path):
-            for seed in os.listdir(seeds_path):
-
-                # Ignore seeds that aren't files or are too big
-                seed_path = os.path.join(seeds_path, seed)
-                if (
-                    not os.path.isfile(seed_path)
-                    or os.path.getsize(seed_path) > SEED_SIZE_LIMIT
-                ):
-                    continue
-
-                # Read the file
-                with open(seed_path, "rb") as f:
-                    data = f.read()
-                seeds.append((seed, data))
+        for seed in os.listdir(seeds_path):
+            seed_path = os.path.join(seeds_path, seed)
+            with open(seed_path, "rb") as f:
+                data = f.read()
+            seeds.append((seed, data))
         log.debug(f"Got {len(seeds)} seeds for benchmark {benchmark}")
 
         # Create the experiment benchmark directory
@@ -165,7 +149,6 @@ def main():
             inst.down()
             fuzzjob.get_dump(dump_path)
             df.to_parquet(data_path)
-            exit(0)
 
 
 if __name__ == "__main__":
