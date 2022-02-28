@@ -175,7 +175,7 @@ class Instance:
     def clear_dirs(self):
         log.debug("Deleting log/testcase directories...")
         self.ssh_worker.exec_command(
-            f"rm -rf {os.path.join(FLUFFI_ARCH_DIR, 'log/')} {os.path.join(FLUFFI_ARCH_DIR, 'testcaseFiles')}"
+            f"rm -rf {os.path.join(FLUFFI_ARCH_DIR, 'logs/')} {os.path.join(FLUFFI_ARCH_DIR, 'testcaseFiles/')}"
         )
         log.debug("Log/testcase directories deleted")
 
