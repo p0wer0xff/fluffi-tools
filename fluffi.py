@@ -260,7 +260,7 @@ class Instance:
             time.sleep(5)
             while fuzzjob.get_num_testcases() > prev_testcases:
                 time.sleep(5)
-        log.debug(f"Fuzzjob named {name} created with ID {id}")
+        log.debug(f"Fuzzjob named {name} created with ID {fuzzjob.id}")
         return fuzzjob
 
     def set_lm(self, num):
