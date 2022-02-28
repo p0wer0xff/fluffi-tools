@@ -73,6 +73,13 @@ class Instance:
         # Compile new build
         log.debug("Compiling new build...")
         subprocess.run(
+            ["./make_dep.sh"],
+            cwd=os.path.join(self.fluffi_path, "core/dependencies/easylogging/"),
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
             ["sudo", "./buildAll.sh"],
             cwd=os.path.join(self.fluffi_path, "build/ubuntu_based/"),
             check=True,
