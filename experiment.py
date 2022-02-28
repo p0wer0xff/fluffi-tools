@@ -10,6 +10,13 @@ import pandas as pd
 
 import fluffi
 
+# Configuration
+BENCHMARKS = ["zstd_stream_decompress"]
+NUM_TRIALS = 20
+CHECK_CPU_TIME_INTERVAL = 10.0  # 10 seconds in real time
+GET_STATS_INTERVAL = 10 * 60  # 10 minutes in CPU time
+TRIAL_TIME = 24 * 60 * 60  # 24 hours in CPU time
+
 # Constants
 N_MIN = 5
 N_MAX = 8
@@ -18,10 +25,6 @@ FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench_out/")
 FUZZBENCH_DIR_REMOTE = "fuzzbench/"
 DUMP_FMT = "{}.sql.gz"
 DATA_FMT = "{}.parquet"
-NUM_TRIALS = 20
-CHECK_CPU_TIME_INTERVAL = 10.0  # 10 seconds in real time
-GET_STATS_INTERVAL = 10 * 60  # 10 minutes in CPU time
-TRIAL_TIME = 24 * 60 * 60  # 24 hours in CPU time
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -60,7 +63,7 @@ def main():
     inst.down()
 
     # Iterate over the Fuzzbench benchmarks
-    for benchmark in os.listdir(FUZZBENCH_DIR):
+    for benchmark in BENCHMARKS:
 
         # Get the benchmark directory
         benchmark_dir = os.path.join(FUZZBENCH_DIR, benchmark)

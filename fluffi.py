@@ -230,12 +230,31 @@ class Instance:
         ]
         for seed in seeds:
             data.append(("filename", seed))
-        r = self.s.post(
-            f"{FLUFFI_URL}/projects/createProject", files=data, expect_str="Success!"
-        )
-        id = int(r.url.split("/view/")[1])
+        sleep_time = util.SLEEP_TIME
+        while True:
+            r = self.s.post(
+                f"{FLUFFI_URL}/projects/createProject",
+                files=data,
+                expect_str="Success!",
+                no_retry=True,
+            )
+            time.sleep(1)
+            fuzzjobs = self.get_fuzzjobs()
+            fuzzjob = next(
+                (fuzzjob for fuzzjob in fuzzjobs if fuzzjob.name == name), None
+            )
+            if fuzzjob is not None:
+                break
+            log.warn(f"Fuzzjob {name} wasn't created")
+            time.sleep(util.SLEEP_TIME)
+            sleep_time = util.get_sleep_time(sleep_time)
+        if not r.ok:
+            prev_testcases = fuzzjob.get_num_testcases()
+            time.sleep(5)
+            while fuzzjob.get_num_testcases() > prev_testcases:
+                time.sleep(5)
         log.debug(f"Fuzzjob named {name} created with ID {id}")
-        return Fuzzjob(self, id, name)
+        return fuzzjob
 
     def set_lm(self, num):
         log.debug(f"Setting LM to {num}...")

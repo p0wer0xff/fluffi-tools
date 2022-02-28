@@ -44,6 +44,7 @@ class FaultTolerantSession(requests.Session):
     def request(self, *args, **kwargs):
         url = args[1]
         expect_str = kwargs.pop("expect_str", None)
+        no_retry = kwargs.pop("no_retry", False)
         sleep_time = SLEEP_TIME
         while True:
             for _ in range(REQ_TRIES):
@@ -62,6 +63,8 @@ class FaultTolerantSession(requests.Session):
                         )
                     else:
                         return r
+                if no_retry:
+                    return r
                 time.sleep(sleep_time)
                 sleep_time = get_sleep_time(sleep_time)
             log.error(f"Request for '{url}' failed {REQ_TRIES} times, checking proxy")

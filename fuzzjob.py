@@ -28,8 +28,6 @@ class Fuzzjob:
             self.f.ssh_master.exec_command(f"rm {self.dump_path}", check=True)
         log.debug(f"Retrieved dump for fuzzjob {self.name}")
 
-    ### Fluffi Web ###
-
     def archive(self):
         log.debug(f"Archiving fuzzjob {self.name}...")
         self.f.s.post(
@@ -59,6 +57,14 @@ class Fuzzjob:
         )
         self.f.manage_agents()
         log.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")
+
+    def get_num_testcases(self):
+        log.debug(f"Getting number of testcases for {self.name}...")
+        testcases = self.f.db.query_one(
+            "SELECT COUNT(*) FROM interesting_testcases", self.db_name
+        )[0]
+        log.debug(f"Got {testcases} testcases for {self.name}")
+        return testcases
 
     def get_stats(self):
         log.debug(f"Getting stats for {self.name}...")
