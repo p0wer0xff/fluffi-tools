@@ -10,9 +10,15 @@ worker6
 worker7
 worker8
 
+[hosts]
+host5
+host6
+host7
+host8
+
 [fluffi:children]
 masters
 workers
 
-[fluffi:vars]
+[all:vars]
 ansible_connection=ssh

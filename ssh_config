@@ -1,3 +1,7 @@
+Host host*
+	User sears
+	IdentityFile ~/.ssh/id_rsa
+
 Host master*
 	User ubuntu
 	IdentityFile ~/.ssh/id_rsa
@@ -6,11 +10,17 @@ Host worker*
 	User fluffi_linux_user
 	IdentityFile ~/.ssh/id_rsa
 
+Host host5
+	Hostname 250.154.202.1
+
 Host master5
 	Hostname 250.154.202.36
 
 Host worker5
 	Hostname 250.154.202.119
+
+Host host6
+	Hostname 250.154.200.1
 
 Host master6
 	Hostname 250.154.200.108
@@ -18,11 +28,17 @@ Host master6
 Host worker6
 	Hostname 250.154.200.197
 
+Host host7
+	Hostname 250.154.201.1
+
 Host master7
 	Hostname 250.154.201.187
 
 Host worker7
 	Hostname 250.154.201.109
+
+Host host8
+	Hostname 250.154.54.1
 
 Host master8
 	Hostname 250.154.54.178
