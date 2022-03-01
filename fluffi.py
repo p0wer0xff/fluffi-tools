@@ -11,6 +11,7 @@ from fuzzjob import Fuzzjob
 # Constants
 FLUFFI_PATH_FMT = os.path.expanduser("~/fluffi{}/")
 LOCATION_FMT = "1021-{}"
+SSH_HOST_FMT = "host{}"
 SSH_MASTER_FMT = "master{}"
 SSH_WORKER_FMT = "worker{}"
 WORKER_NAME_FMT = "fluffi-1021-{}-Linux1"
@@ -39,6 +40,7 @@ class Instance:
         self.dead_cpu_time = 0
 
         # Connect to SSH and DB
+        self.ssh_host = util.FaultTolerantSSHAndSFTPClient(SSH_HOST_FMT.format(self.n))
         self.ssh_master = util.FaultTolerantSSHAndSFTPClient(
             SSH_MASTER_FMT.format(self.n)
         )
@@ -118,6 +120,7 @@ class Instance:
         linker_path=None,
     ):
         log.debug(f"Starting fuzzjob with prefix {name_prefix}...")
+        self.set_kernel_vals()
         fuzzjob = self.new_fuzzjob(
             name_prefix, target_path, module, seeds, library_path, linker_path
         )
@@ -200,6 +203,11 @@ class Instance:
         self.pid_cpu_time = pid_cpu_time
         log.debug(f"Got CPU time of {cpu_time_total / 60:.2f} minutes")
         return cpu_time_total
+
+    def set_kernel_vals(self):
+        log.debug("Setting kernel values...")
+        self.ssh_host.exec_command("sudo /home/maverick/bin/afl-setup.sh", check=True)
+        log.debug("Kernel values set")
 
     ### Fluffi Web ###
 
