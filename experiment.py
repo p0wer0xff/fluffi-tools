@@ -12,7 +12,7 @@ import fluffi
 
 # Configuration
 FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench_out/")
-BENCHMARKS = ["zstd_stream_decompress"]  # os.listdir(FUZZBENCH_DIR) for all
+BENCHMARKS = ["bloaty_fuzz_target"]  # os.listdir(FUZZBENCH_DIR) for all
 NUM_TRIALS = 20
 CHECK_CPU_TIME_INTERVAL = 10.0  # 10 seconds in real time
 GET_STATS_INTERVAL = 10 * 60  # 10 minutes in CPU time
@@ -72,7 +72,7 @@ def main():
             continue
 
         # Read the target
-        with open(os.path.join(benchmark_dir, "target.txt")) as f:
+        with open(os.path.join(benchmark_dir, "target.txt"), "r") as f:
             target_name = f.read().strip()
         target_path = os.path.join(benchmark_dir, target_name)
         log.debug(f"Benchmark {benchmark} has target {target_name}")

@@ -93,9 +93,16 @@ class Fuzzjob:
             d["active_run"] = 0
             d["active_eva"] = 0
             d["active_gen"] = 0
-        # Get number of paths
-        # d["paths"] = self.f.db.query_one(
-        #     "SELECT COUNT(*) FROM edge_coverage", self.db_name
-        # )[0]
+        d["paths"] = self.f.db.query_one(
+            "SELECT COUNT(*) FROM edge_coverage", self.db_name
+        )[0]
+        _, stdout, _ = self.f.ssh_worker.exec_command(
+            "awk '{ print $1 }' /proc/loadavg", check=True
+        )
+        d["load"] = float(stdout.read().decode().strip())
+        _, stdout, _ = self.f.ssh_worker.exec_command(
+            "free | grep Mem | awk '{print $3/$2 * 100.0}'", check=True
+        )
+        d["memory_used"] = float(stdout.read().decode().strip())
         log.debug(f"Got stats for {self.name}")
         return d
