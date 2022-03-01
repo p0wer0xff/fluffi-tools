@@ -133,7 +133,7 @@ def main():
             )
 
             # Collect stats
-            df = pd.DataFrame()
+            stats = []
             real_time_start = time.time()
             cpu_time_prev = 0
             while cpu_time_prev < TRIAL_TIME:
@@ -146,12 +146,13 @@ def main():
                     row = fuzzjob.get_stats()
                     row["cpu_time"] = cpu_time
                     row["real_time"] = time.time() - real_time_start
-                    df = df.append(row, ignore_index=True)
+                    stats.append(row)
                     cpu_time_prev = cpu_time
 
             # Bring down and dump data
             inst.down()
             fuzzjob.get_dump(dump_path)
+            df = pd.DataFrame.from_records(stats)
             df.to_parquet(data_path)
 
 
