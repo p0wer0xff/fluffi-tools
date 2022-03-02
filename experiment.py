@@ -14,9 +14,9 @@ import fluffi
 FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench_out/")
 BENCHMARKS = ["bloaty_fuzz_target"]  # os.listdir(FUZZBENCH_DIR) for all
 NUM_TRIALS = 20
-CHECK_CPU_TIME_INTERVAL = 10.0  # 10 seconds in real time
+CHECK_CPU_TIME_INTERVAL = 25.0  # 10 seconds in real time
 GET_STATS_INTERVAL = 10 * 60  # 10 minutes in CPU time
-TRIAL_TIME = 24 * 60 * 60  # 24 hours in CPU time
+TRIAL_TIME = 30 * 60 * 60  # 30 hours in CPU time
 SEED_NUM_LIMIT = 4000
 
 # Constants
@@ -26,6 +26,7 @@ EXP_BASE_DIR = os.path.expanduser("~/fluffi-tools/experiments/")
 FUZZBENCH_DIR_REMOTE = "fuzzbench/"
 DUMP_FMT = "{}.sql.gz"
 DATA_FMT = "{}.parquet"
+PROGRESS_INTERVAL = 0.2
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -102,14 +103,13 @@ def main():
         # Iterate over number of trials
         for i in range(1, NUM_TRIALS + 1):
             trial = str(i).zfill(2)
+            trial_name = f"{benchmark}-{trial}"
 
             # Check if trial already complete
             data_path = os.path.join(exp_benchmark_dir, DATA_FMT.format(trial))
             dump_path = os.path.join(exp_benchmark_dir, DUMP_FMT.format(trial))
             if os.path.isfile(data_path) and os.path.isfile(dump_path):
-                log.debug(
-                    f"Trial {trial} for benchmark {benchmark} already complete, skipping"
-                )
+                log.debug(f"Trial {trial_name} already complete, skipping")
                 continue
             try:
                 os.remove(data_path)
@@ -121,8 +121,8 @@ def main():
                 pass
 
             # Start the experiment
-            log.info(f"On trial {trial} for benchmark {benchmark}")
-            run_name = re.sub("[^0-9a-zA-Z]+", "", f"{benchmark}{trial}")
+            log.info(f"Starting {trial_name}...")
+            run_name = re.sub("[^0-9a-zA-Z]+", "", trial_name)
             fuzzjob = inst.up(
                 run_name,
                 target_path_remote,
@@ -133,9 +133,11 @@ def main():
             )
 
             # Collect stats
+            log.info(f"Trial {trial_name} started")
             stats = []
             real_time_start = time.time()
             cpu_time_prev = 0
+            progress_counter = PROGRESS_INTERVAL
             while cpu_time_prev < TRIAL_TIME:
                 time.sleep(
                     CHECK_CPU_TIME_INTERVAL
@@ -148,12 +150,22 @@ def main():
                     row["real_time"] = time.time() - real_time_start
                     stats.append(row)
                     cpu_time_prev = cpu_time
+                    if cpu_time > (progress_counter * TRIAL_TIME):
+                        log.info(
+                            f"Trial {trial_name} is {int(progress_counter * 100)}% done"
+                        )
+                        progress_counter += PROGRESS_INTERVAL
 
             # Bring down and dump data
+            log.info(
+                f"Trial {trial_name} ran {row['completed_testcases']} testcases and took {row['real_time'] // 60} minutes"
+            )
+            log.info(f"Trial {trial_name} complete, stopping...")
             inst.down()
             fuzzjob.get_dump(dump_path)
             df = pd.DataFrame.from_records(stats)
             df.to_parquet(data_path)
+            log.info(f"Trial {trial_name} stopped and data collected")
 
 
 if __name__ == "__main__":

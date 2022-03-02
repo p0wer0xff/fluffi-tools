@@ -23,6 +23,11 @@ SUT_PATH = os.path.join(FLUFFI_DIR, "SUT/")
 FLUFFI_URL = "http://web.fluffi:8880"
 PM_URL = "http://pole.fluffi:8888/api/v2"
 DB_NAME = "fluffi_gm"
+LM = 1
+GEN = 2
+RUN = 11
+EVA = 11
+MANAGE_AGENTS_INTERVAL = 60
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -38,6 +43,7 @@ class Instance:
         self.master_addr = util.get_ssh_addr(SSH_MASTER_FMT.format(self.n))
         self.pid_cpu_time = {}
         self.dead_cpu_time = 0
+        self.last_manage_time = 0
 
         # Connect to SSH and DB
         self.ssh_host = util.FaultTolerantSSHAndSFTPClient(SSH_HOST_FMT.format(self.n))
@@ -124,8 +130,8 @@ class Instance:
         fuzzjob = self.new_fuzzjob(
             name_prefix, target_path, module, seeds, library_path, linker_path
         )
-        self.set_lm(1)
-        fuzzjob.set_gre(2, 11, 11)
+        self.set_lm(LM)
+        fuzzjob.set_gre(GEN, RUN, EVA)
         log.debug(f"Started fuzzjob named {fuzzjob.name}")
         return fuzzjob
 
@@ -194,13 +200,16 @@ class Instance:
             pid, mins, secs = map(int, match)
             pid_cpu_time[pid] = (mins * 60) + secs
             cpu_time_total += pid_cpu_time[pid]
-        log.debug(f"{len(pid_cpu_time) // 2} agents are running")
+        agents = len(pid_cpu_time) // 2
         for pid, cpu_time in self.pid_cpu_time.items():
             if pid not in pid_cpu_time:
                 log.debug(f"Dead PID {pid}, adding its time of {cpu_time}")
                 self.dead_cpu_time += cpu_time
         cpu_time_total += self.dead_cpu_time
         self.pid_cpu_time = pid_cpu_time
+        if agents != sum([LM, GEN, RUN, EVA]):
+            log.warn(f"Incorrect number of agents ({agents}) are running")
+            self.manage_agents()
         log.debug(f"Got CPU time of {cpu_time_total / 60:.2f} minutes")
         return cpu_time_total
 
@@ -281,12 +290,18 @@ class Instance:
             },
             expect_str="Success!",
         )
-        self.manage_agents()
+        self.manage_agents(True)
         log.debug(f"LM set to {num}")
 
     ### Polemarch ###
 
-    def manage_agents(self):
+    def manage_agents(self, ignore_interval=False):
+        if (
+            not ignore_interval
+            and (time.time() - self.last_manage_time) < MANAGE_AGENTS_INTERVAL
+        ):
+            log.debug("Not enough time since last manage agents")
+            return
         log.debug("Starting manage agents task...")
         s = util.FaultTolerantSession(self)
         s.auth = ("admin", "admin")
@@ -301,6 +316,7 @@ class Instance:
             if r.json()["status"] == "OK":
                 break
             time.sleep(util.SLEEP_TIME)
+        self.last_manage_time = time.time()
         log.debug("Manage agents success")
 
     ### DB ###

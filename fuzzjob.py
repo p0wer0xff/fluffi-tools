@@ -55,7 +55,7 @@ class Fuzzjob:
             },
             expect_str="Success!",
         )
-        self.f.manage_agents()
+        self.f.manage_agents(True)
         log.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")
 
     def get_num_testcases(self):
