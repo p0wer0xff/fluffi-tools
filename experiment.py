@@ -12,7 +12,7 @@ import fluffi
 
 # Configuration
 FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench_out/")
-BENCHMARKS = ["bloaty_fuzz_target"]  # os.listdir(FUZZBENCH_DIR) for all
+BENCHMARKS = ["proj4_standard_fuzzer"]  # os.listdir(FUZZBENCH_DIR) for all
 NUM_TRIALS = 20
 CHECK_CPU_TIME_INTERVAL = 25.0  # 10 seconds in real time
 GET_STATS_INTERVAL = 10 * 60  # 10 minutes in CPU time
@@ -95,6 +95,8 @@ def main():
                 data = f.read()
             seeds.append((seed, data))
         log.debug(f"Got {len(seeds)} seeds for benchmark {benchmark}")
+        if len(seeds) == 0:
+            seeds.append(("empty", b""))
 
         # Create the experiment benchmark directory
         exp_benchmark_dir = os.path.join(exp_dir, benchmark)
