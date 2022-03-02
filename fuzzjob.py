@@ -100,9 +100,19 @@ class Fuzzjob:
             "awk '{ print $1 }' /proc/loadavg", check=True
         )
         d["load"] = float(stdout.read().decode().strip())
+        if d["load"] > 15.7:
+            log.warn(f"Load average is at {d['load']}")
         _, stdout, _ = self.f.ssh_worker.exec_command(
             "free | grep Mem | awk '{print $3/$2 * 100.0}'", check=True
         )
         d["memory_used"] = float(stdout.read().decode().strip())
+        if d["memory_used"] > 80:
+            log.warn(f"Memory usage is at {d['memory_used']}%")
+        _, stdout, _ = self.f.ssh_worker.exec_command(
+            "df / | tail -n +2 | awk '{ print $5 }'", check=True
+        )
+        d["disk_used"] = int(stdout.read().decode().strip()[:-1])
+        if d["disk_used"] > 70:
+            log.warn(f"Disk usage is at {d['disk_used']}%")
         log.debug(f"Got stats for {self.name}")
         return d

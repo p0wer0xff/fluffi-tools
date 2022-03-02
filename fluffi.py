@@ -125,7 +125,7 @@ class Instance:
             name_prefix, target_path, module, seeds, library_path, linker_path
         )
         self.set_lm(1)
-        fuzzjob.set_gre(2, 10, 10)
+        fuzzjob.set_gre(2, 11, 11)
         log.debug(f"Started fuzzjob named {fuzzjob.name}")
         return fuzzjob
 
