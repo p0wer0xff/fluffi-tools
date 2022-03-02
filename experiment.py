@@ -12,9 +12,20 @@ import fluffi
 
 # Configuration
 FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench_out/")
-BENCHMARKS = ["proj4_standard_fuzzer"]  # os.listdir(FUZZBENCH_DIR) for all
+BENCHMARKS = [
+    "arrow_parquet-arrow-fuzz",
+    "proj4_standard_fuzzer",
+    "stb_stbi_read_fuzzer",
+    "wireshark_fuzzshark_ip",
+    "poppler_pdf_fuzzer",
+    "ndpi_fuzz_ndpi_reader",
+    "matio_matio_fuzzer",
+    "tpm2_tpm2_execute_command_fuzzer",
+    "openh264_decoder_fuzzer",
+    "njs_njs_process_script_fuzzer",
+]
 NUM_TRIALS = 20
-CHECK_CPU_TIME_INTERVAL = 25.0  # 10 seconds in real time
+CHECK_CPU_TIME_INTERVAL = 10.0  # 10 seconds in real time
 GET_STATS_INTERVAL = 10 * 60  # 10 minutes in CPU time
 TRIAL_TIME = 30 * 60 * 60  # 30 hours in CPU time
 SEED_NUM_LIMIT = 4000
