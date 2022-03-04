@@ -8,6 +8,10 @@ import util
 # Constants
 DB_FUZZJOB_FMT = "fluffi_{}"
 DUMP_PATH_FMT = "/srv/fluffi/data/ftp/files/archive/{}.sql.gz"
+MANAGE_AGENTS_INTERVAL = 60
+GEN = 2
+RUN = 11
+EVA = 11
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -20,6 +24,9 @@ class Fuzzjob:
         self.name = name
         self.db_name = DB_FUZZJOB_FMT.format(self.name)
         self.dump_path = DUMP_PATH_FMT.format(self.db_name)
+        self.pid_cpu_time = {}
+        self.dead_cpu_time = 0
+        self.last_manage_time = time.time()
 
     def get_dump(self, local_path, clean=True):
         log.debug(f"Retrieving dump for fuzzjob {self.name}...")
@@ -55,7 +62,7 @@ class Fuzzjob:
             },
             expect_str="Success!",
         )
-        self.f.manage_agents(True)
+        self.f.manage_agents()
         log.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")
 
     def get_num_testcases(self):
@@ -65,6 +72,35 @@ class Fuzzjob:
         )[0]
         log.debug(f"Got {testcases} testcases for {self.name}")
         return testcases
+
+    def cpu_time(self):
+        log.debug("Getting CPU time...")
+        _, stdout, _ = self.ssh_worker.exec_command(
+            f"ps --cumulative -ax | grep {self.location} | grep -v grep | awk '{{print $1, $4}}'",
+            check=True,
+        )
+        cpu_time_total = 0
+        pid_cpu_time = {}
+        for match in re.findall(r"(\d+) (\d+):(\d+)", stdout.read().decode()):
+            pid, mins, secs = map(int, match)
+            pid_cpu_time[pid] = (mins * 60) + secs
+            cpu_time_total += pid_cpu_time[pid]
+        agents = len(pid_cpu_time) // 2
+        for pid, cpu_time in self.pid_cpu_time.items():
+            if pid not in pid_cpu_time:
+                log.debug(f"Dead PID {pid}, adding its time of {cpu_time}")
+                self.dead_cpu_time += cpu_time
+        cpu_time_total += self.dead_cpu_time
+        self.pid_cpu_time = pid_cpu_time
+        if (
+            agents != sum([fluffi.LM, GEN, RUN, EVA])
+            and (time.time() - self.last_manage_time) > MANAGE_AGENTS_INTERVAL
+        ):
+            log.warn(f"Incorrect number of agents ({agents}) are running")
+            self.f.manage_agents()
+            self.last_manage_time = time.time()
+        log.debug(f"Got CPU time of {cpu_time_total / 60:.2f} minutes")
+        return cpu_time_total
 
     def get_stats(self):
         log.debug(f"Getting stats for {self.name}...")
