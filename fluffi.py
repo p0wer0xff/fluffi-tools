@@ -273,9 +273,7 @@ class Instance:
             time.sleep(util.SLEEP_TIME)
             sleep_time = util.get_sleep_time(sleep_time)
         if not r.ok:
-            prev_testcases = fuzzjob.get_num_testcases()
-            time.sleep(5)
-            while fuzzjob.get_num_testcases() > prev_testcases:
+            while fuzzjob.get_num_testcases() < len(seeds):
                 time.sleep(5)
         log.debug(f"Fuzzjob named {name} created with ID {fuzzjob.id}")
         return fuzzjob
