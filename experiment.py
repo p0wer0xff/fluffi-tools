@@ -14,14 +14,14 @@ import fluffi
 FUZZBENCH_DIR = os.path.expanduser("~/fuzzbench_out/")
 BENCHMARKS = [
     "arrow_parquet-arrow-fuzz",
-    "proj4_standard_fuzzer",
     "stb_stbi_read_fuzzer",
-    "wireshark_fuzzshark_ip",
     "poppler_pdf_fuzzer",
-    "ndpi_fuzz_ndpi_reader",
     "matio_matio_fuzzer",
-    "tpm2_tpm2_execute_command_fuzzer",
     "openh264_decoder_fuzzer",
+    "aspell_aspell_fuzzer",
+    "proj4_standard_fuzzer",
+    "wireshark_fuzzshark_ip",
+    "ffmpeg_ffmpeg_demuxer_fuzzer",
     "njs_njs_process_script_fuzzer",
 ]
 NUM_TRIALS = 20
@@ -156,7 +156,7 @@ def main():
                     CHECK_CPU_TIME_INTERVAL
                     - (time.time() - real_time_start) % CHECK_CPU_TIME_INTERVAL
                 )
-                cpu_time = inst.get_cpu_time()
+                cpu_time = fuzzjob.get_cpu_time()
                 if (cpu_time - cpu_time_prev) >= GET_STATS_INTERVAL:
                     row = fuzzjob.get_stats()
                     row["cpu_time"] = cpu_time
