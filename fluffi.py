@@ -124,7 +124,7 @@ class Instance:
             name_prefix, target_path, module, seeds, library_path, linker_path
         )
         self.set_lm(LM)
-        fuzzjob.set_gre(2, 11, 11)
+        fuzzjob.set_gre()
         log.debug(f"Started fuzzjob named {fuzzjob.name}")
         return fuzzjob
 
@@ -132,7 +132,7 @@ class Instance:
         log.debug("Stopping...")
         fuzzjobs = self.get_fuzzjobs()
         for fuzzjob in fuzzjobs:
-            fuzzjob.set_gre(0, 0, 0)
+            fuzzjob.set_gre(True)
         self.set_lm(0)
         self.kill_leftover_agents()
         for fuzzjob in fuzzjobs:

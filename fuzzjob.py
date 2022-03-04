@@ -9,9 +9,9 @@ import util
 DB_FUZZJOB_FMT = "fluffi_{}"
 DUMP_PATH_FMT = "/srv/fluffi/data/ftp/files/archive/{}.sql.gz"
 MANAGE_AGENTS_INTERVAL = 60
-GEN = 2
-RUN = 11
-EVA = 11
+GEN_INIT = 2
+RUN_INIT = 11
+EVA_INIT = 11
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -24,6 +24,9 @@ class Fuzzjob:
         self.name = name
         self.db_name = DB_FUZZJOB_FMT.format(self.name)
         self.dump_path = DUMP_PATH_FMT.format(self.db_name)
+        self.gen = GEN_INIT
+        self.run = RUN_INIT
+        self.eva = EVA_INIT
         self.pid_cpu_time = {}
         self.dead_cpu_time = 0
         self.last_manage_time = time.time()
@@ -63,7 +66,7 @@ class Fuzzjob:
 
         # Attempt manage agents if incorrect number running
         if (
-            agents != sum([fluffi.LM, GEN, RUN, EVA])
+            agents != sum([fluffi.LM, self.gen, self.run, self.eva])
             and (time.time() - self.last_manage_time) > MANAGE_AGENTS_INTERVAL
         ):
             log.warn(f"Incorrect number of agents ({agents}) are running")
@@ -88,22 +91,28 @@ class Fuzzjob:
             time.sleep(util.SLEEP_TIME)
         log.debug(f"Fuzzjob {self.name} archived")
 
-    def set_gre(self, gen, run, eva):
-        log.debug(f"Setting GRE to {gen}, {run}, {eva} for {self.name}...")
+    def set_gre(self, down=False):
+        if down:
+            self.gen = 0
+            self.run = 0
+            self.eva = 0
+        log.debug(
+            f"Setting GRE to {self.gen}, {self.run}, {self.eva} for {self.name}..."
+        )
         self.f.s.post(
             f"{fluffi.FLUFFI_URL}/systems/configureFuzzjobInstances/{self.name}",
             files={
-                f"{self.f.worker_name}_tg": (None, gen),
+                f"{self.f.worker_name}_tg": (None, self.gen),
                 f"{self.f.worker_name}_tg_arch": (None, fluffi.ARCH),
-                f"{self.f.worker_name}_tr": (None, run),
+                f"{self.f.worker_name}_tr": (None, self.run),
                 f"{self.f.worker_name}_tr_arch": (None, fluffi.ARCH),
-                f"{self.f.worker_name}_te": (None, eva),
+                f"{self.f.worker_name}_te": (None, self.eva),
                 f"{self.f.worker_name}_te_arch": (None, fluffi.ARCH),
             },
             expect_str="Success!",
         )
         self.f.manage_agents()
-        log.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")
+        log.debug(f"GRE set to {self.gen}, {self.run}, {self.eva} for {self.name}")
 
     ### DB ###
 
