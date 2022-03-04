@@ -186,6 +186,12 @@ class Instance:
         self.ssh_host.exec_command("sudo /home/maverick/bin/afl-setup.sh", check=True)
         log.debug("Kernel values set")
 
+    def get_load(self):
+        _, stdout, _ = self.ssh_worker.exec_command(
+            "awk '{ print $1 }' /proc/loadavg", check=True
+        )
+        return float(stdout.read().decode().strip())
+
     ### Fluffi Web ###
 
     def new_fuzzjob(

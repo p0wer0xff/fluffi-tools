@@ -8,7 +8,12 @@ import util
 # Constants
 DB_FUZZJOB_FMT = "fluffi_{}"
 DUMP_PATH_FMT = "/srv/fluffi/data/ftp/files/archive/{}.sql.gz"
-MANAGE_AGENTS_INTERVAL = 60
+ADJUST_AGENTS = False
+MANAGE_AGENTS_INTERVAL = 1 * 60  # 1 minute
+ADJUST_GRE_INTERVAL = 2 * 60  # 2 minutes
+LOAD_HIGH = 15.8
+LOAD_LOW = 14.3
+LOAD_COUNTER_MIN = 6
 GEN_INIT = 2
 RUN_INIT = 11
 EVA_INIT = 11
@@ -30,6 +35,9 @@ class Fuzzjob:
         self.pid_cpu_time = {}
         self.dead_cpu_time = 0
         self.last_manage_time = time.time()
+        self.last_adjust_gre_time = time.time()
+        self.load_high_counter = 0
+        self.load_low_counter = 0
 
     ### SSH ###
 
@@ -40,14 +48,14 @@ class Fuzzjob:
             self.f.ssh_master.exec_command(f"rm {self.dump_path}", check=True)
         log.debug(f"Retrieved dump for fuzzjob {self.name}")
 
-    def cpu_time(self):
+    def get_cpu_time(self):
         log.debug("Getting CPU time...")
         cpu_time_total = 0
         pid_cpu_time = {}
 
         # Get the new PIDs and time
-        _, stdout, _ = self.ssh_worker.exec_command(
-            f"ps --cumulative -ax | grep {self.location} | grep -v grep | awk '{{print $1, $4}}'",
+        _, stdout, _ = self.f.ssh_worker.exec_command(
+            f"ps --cumulative -ax | grep {self.f.location} | grep -v grep | awk '{{print $1, $4}}'",
             check=True,
         )
         for match in re.findall(r"(\d+) (\d+):(\d+)", stdout.read().decode()):
@@ -70,8 +78,38 @@ class Fuzzjob:
             and (time.time() - self.last_manage_time) > MANAGE_AGENTS_INTERVAL
         ):
             log.warn(f"Incorrect number of agents ({agents}) are running")
+            self.f.kill_leftover_agents()
             self.f.manage_agents()
             self.last_manage_time = time.time()
+
+        # Adjust GRE based on load
+        if ADJUST_AGENTS:
+            if (time.time() - self.last_manage_time) > MANAGE_AGENTS_INTERVAL:
+                load = self.f.get_load()
+                if load > LOAD_HIGH:
+                    self.load_high_counter += 1
+                    self.load_low_counter = 0
+                    if self.load_high_counter >= LOAD_COUNTER_MIN:
+                        self.run -= 1
+                        self.eva -= 1
+                        log.warn(f"Decreasing RE agents to {self.run}")
+                        self.set_gre()
+                        self.load_high_counter = 0
+                elif load < LOAD_LOW:
+                    self.load_high_counter = 0
+                    self.load_low_counter += 1
+                    if self.load_low_counter >= LOAD_COUNTER_MIN:
+                        self.run += 1
+                        self.eva += 1
+                        log.warn(f"Increasing RE agents to {self.run}")
+                        self.set_gre()
+                        self.load_low_counter = 0
+                else:
+                    self.load_high_counter = 0
+                    self.load_low_counter = 0
+            else:
+                self.load_high_counter = 0
+                self.load_low_counter = 0
 
         log.debug(f"Got CPU time of {cpu_time_total / 60:.2f} minutes")
         return cpu_time_total
@@ -112,6 +150,7 @@ class Fuzzjob:
             expect_str="Success!",
         )
         self.f.manage_agents()
+        self.last_manage_time = time.time()
         log.debug(f"GRE set to {self.gen}, {self.run}, {self.eva} for {self.name}")
 
     ### DB ###
@@ -162,12 +201,7 @@ class Fuzzjob:
         )[0]
 
         # Load average
-        _, stdout, _ = self.f.ssh_worker.exec_command(
-            "awk '{ print $1 }' /proc/loadavg", check=True
-        )
-        d["load"] = float(stdout.read().decode().strip())
-        if d["load"] > 15.7:
-            log.warn(f"Load average is at {d['load']}")
+        d["load"] = self.f.get_load()
 
         # RAM usage
         _, stdout, _ = self.f.ssh_worker.exec_command(
