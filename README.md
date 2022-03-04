@@ -14,10 +14,8 @@ sudo cp ansible_hosts /etc/ansible/hosts
 
 ## Commands
 
-Run a command on all hosts:
-
 ```bash
 ansible fluffi -f 1 -a "uptime"
-watch -n 10 "ansible workers -f 1 -a 'uptime'"
-nohup python3 experiment.py run1 5 >/dev/null 2>&1 &
+watch -n 30 "ansible workers -f 1 -a 'uptime'"
+nohup python3 experiment.py run1 5 &
 ```
