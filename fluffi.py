@@ -199,9 +199,13 @@ class Instance:
     ):
         name = f"{name_prefix}{int(time.time())}"
         log.debug(f"Creating new fuzzjob named {name}...")
+
+        # Set command line
         cmd = os.path.join(SUT_PATH, target_path)
         if library_path is not None and linker_path is not None:
             cmd = f"{os.path.join(SUT_PATH, linker_path)} --library-path {os.path.join(SUT_PATH, library_path)} {cmd}"
+
+        # Create fuzzjob with seeds
         data = [
             ("name", (None, name)),
             ("subtype", (None, "X64_Lin_DynRioSingle")),
@@ -222,6 +226,8 @@ class Instance:
         ]
         for seed in seeds:
             data.append(("filename", seed))
+
+        # Attempt to create
         sleep_time = util.SLEEP_TIME
         while True:
             r = self.s.post(
@@ -240,9 +246,12 @@ class Instance:
             log.warn(f"Fuzzjob {name} wasn't created")
             time.sleep(util.SLEEP_TIME)
             sleep_time = util.get_sleep_time(sleep_time)
+
+        # If timeout, wait until all testcases added
         if not r.ok:
             while fuzzjob.get_num_testcases() < len(seeds):
                 time.sleep(5)
+
         log.debug(f"Fuzzjob named {name} created with ID {fuzzjob.id}")
         return fuzzjob
 
