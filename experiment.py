@@ -75,48 +75,50 @@ def main():
     inst = fluffi.Instance(args.n)
     inst.down()
 
-    # Iterate over the Fuzzbench benchmarks
-    for benchmark in BENCHMARKS:
+    # Iterate over number of trials
+    for i in range(1, NUM_TRIALS + 1):
+        trial = str(i).zfill(2)
 
-        # Get the benchmark directory
-        benchmark_dir = os.path.join(FUZZBENCH_DIR, benchmark)
-        if not os.path.isdir(benchmark_dir):
-            continue
-
-        # Read the target
-        with open(os.path.join(benchmark_dir, "target.txt"), "r") as f:
-            target_name = f.read().strip()
-        target_path = os.path.join(benchmark_dir, target_name)
-        log.debug(f"Benchmark {benchmark} has target {target_name}")
-        with open(target_path, "rb") as f:
-            data = f.read()
-        module = (target_name, data)
-        target_path_remote = os.path.join(FUZZBENCH_DIR_REMOTE, benchmark, target_name)
-        library_path_remote = os.path.join(FUZZBENCH_DIR_REMOTE, benchmark, "lib/")
-        linker_path_remote = os.path.join(
-            FUZZBENCH_DIR_REMOTE, benchmark, "ld-linux-x86-64.so.2"
-        )
-
-        # Read the seeds
-        seeds_path = os.path.join(benchmark_dir, "seeds/")
-        seeds = []
-        for seed in os.listdir(seeds_path):
-            seed_path = os.path.join(seeds_path, seed)
-            with open(seed_path, "rb") as f:
-                data = f.read()
-            seeds.append((seed, data))
-        log.debug(f"Got {len(seeds)} seeds for benchmark {benchmark}")
-        if len(seeds) == 0:
-            seeds.append(("empty", b""))
-
-        # Create the experiment benchmark directory
-        exp_benchmark_dir = os.path.join(exp_dir, benchmark)
-        os.makedirs(exp_benchmark_dir, exist_ok=True)
-
-        # Iterate over number of trials
-        for i in range(1, NUM_TRIALS + 1):
-            trial = str(i).zfill(2)
+        # Iterate over the Fuzzbench benchmarks
+        for benchmark in BENCHMARKS:
             trial_name = f"{benchmark}-{trial}"
+
+            # Get the benchmark directory
+            benchmark_dir = os.path.join(FUZZBENCH_DIR, benchmark)
+            if not os.path.isdir(benchmark_dir):
+                continue
+
+            # Read the target
+            with open(os.path.join(benchmark_dir, "target.txt"), "r") as f:
+                target_name = f.read().strip()
+            target_path = os.path.join(benchmark_dir, target_name)
+            log.debug(f"Benchmark {benchmark} has target {target_name}")
+            with open(target_path, "rb") as f:
+                data = f.read()
+            module = (target_name, data)
+            target_path_remote = os.path.join(
+                FUZZBENCH_DIR_REMOTE, benchmark, target_name
+            )
+            library_path_remote = os.path.join(FUZZBENCH_DIR_REMOTE, benchmark, "lib/")
+            linker_path_remote = os.path.join(
+                FUZZBENCH_DIR_REMOTE, benchmark, "ld-linux-x86-64.so.2"
+            )
+
+            # Read the seeds
+            seeds_path = os.path.join(benchmark_dir, "seeds/")
+            seeds = []
+            for seed in os.listdir(seeds_path):
+                seed_path = os.path.join(seeds_path, seed)
+                with open(seed_path, "rb") as f:
+                    data = f.read()
+                seeds.append((seed, data))
+            log.debug(f"Got {len(seeds)} seeds for benchmark {benchmark}")
+            if len(seeds) == 0:
+                seeds.append(("empty", b""))
+
+            # Create the experiment benchmark directory
+            exp_benchmark_dir = os.path.join(exp_dir, benchmark)
+            os.makedirs(exp_benchmark_dir, exist_ok=True)
 
             # Check if trial already complete
             data_path = os.path.join(exp_benchmark_dir, DATA_FMT.format(trial))
