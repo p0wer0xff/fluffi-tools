@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import socket
 import subprocess
 import time
@@ -177,7 +176,7 @@ class Instance:
     def clear_dirs(self):
         log.debug("Deleting log/testcase directories...")
         self.ssh_worker.exec_command(
-            f"rm -rf {os.path.join(FLUFFI_ARCH_DIR, 'logs/')} {os.path.join(FLUFFI_ARCH_DIR, 'testcaseFiles/')}"
+            f"sudo rm -rf /var/log/*.gz {os.path.join(FLUFFI_ARCH_DIR, 'logs/')} {os.path.join(FLUFFI_ARCH_DIR, 'testcaseFiles/')}"
         )
         log.debug("Log/testcase directories deleted")
 

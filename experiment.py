@@ -27,7 +27,7 @@ BENCHMARKS = [
 NUM_TRIALS = 20
 CHECK_CPU_TIME_INTERVAL = 10.0  # 10 seconds in real time
 GET_STATS_INTERVAL = 10 * 60  # 10 minutes in CPU time
-TRIAL_TIME = 30 * 60 * 60  # 30 hours in CPU time
+TRIAL_TIME = 24 * 60 * 60  # 24 hours in CPU time
 SEED_NUM_LIMIT = 4000
 
 # Constants

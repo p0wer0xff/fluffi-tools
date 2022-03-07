@@ -14,7 +14,7 @@ ADJUST_GRE_INTERVAL = 2 * 60  # 2 minutes
 LOAD_HIGH = 15.8
 LOAD_LOW = 14.3
 LOAD_COUNTER_MIN = 6
-GEN_INIT = 2
+GEN_INIT = 4
 RUN_INIT = 11
 EVA_INIT = 11
 
@@ -78,7 +78,6 @@ class Fuzzjob:
             and (time.time() - self.last_manage_time) > MANAGE_AGENTS_INTERVAL
         ):
             log.warn(f"Incorrect number of agents ({agents}) are running")
-            self.f.kill_leftover_agents()
             self.f.manage_agents()
             self.last_manage_time = time.time()
 
@@ -130,28 +129,25 @@ class Fuzzjob:
         log.debug(f"Fuzzjob {self.name} archived")
 
     def set_gre(self, down=False):
-        if down:
-            self.gen = 0
-            self.run = 0
-            self.eva = 0
-        log.debug(
-            f"Setting GRE to {self.gen}, {self.run}, {self.eva} for {self.name}..."
-        )
+        gen = 0 if down else self.gen
+        run = 0 if down else self.run
+        eva = 0 if down else self.eva
+        log.debug(f"Setting GRE to {gen}, {run}, {eva} for {self.name}...")
         self.f.s.post(
             f"{fluffi.FLUFFI_URL}/systems/configureFuzzjobInstances/{self.name}",
             files={
-                f"{self.f.worker_name}_tg": (None, self.gen),
+                f"{self.f.worker_name}_tg": (None, gen),
                 f"{self.f.worker_name}_tg_arch": (None, fluffi.ARCH),
-                f"{self.f.worker_name}_tr": (None, self.run),
+                f"{self.f.worker_name}_tr": (None, run),
                 f"{self.f.worker_name}_tr_arch": (None, fluffi.ARCH),
-                f"{self.f.worker_name}_te": (None, self.eva),
+                f"{self.f.worker_name}_te": (None, eva),
                 f"{self.f.worker_name}_te_arch": (None, fluffi.ARCH),
             },
             expect_str="Success!",
         )
         self.f.manage_agents()
         self.last_manage_time = time.time()
-        log.debug(f"GRE set to {self.gen}, {self.run}, {self.eva} for {self.name}")
+        log.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")
 
     ### DB ###
 
@@ -184,16 +180,6 @@ class Fuzzjob:
         d["hangs"] = int(matches[6])
         d["no_response"] = int(matches[7])
         d["covered_blocks"] = int(matches[8])
-        d["active_lm"] = int(matches[9])
-        try:
-            d["active_run"] = int(matches[11])
-            d["active_eva"] = int(matches[12])
-            d["active_gen"] = int(matches[13])
-        except:
-            log.warn(f"Could not get active agents for {self.name}")
-            d["active_run"] = 0
-            d["active_eva"] = 0
-            d["active_gen"] = 0
 
         # Edge coverage from DB
         d["paths"] = self.f.db.query_one(
@@ -202,6 +188,8 @@ class Fuzzjob:
 
         # Load average
         d["load"] = self.f.get_load()
+        if d["load"] > 16:
+            log.warn(f"Load average is at {d['load']}")
 
         # RAM usage
         _, stdout, _ = self.f.ssh_worker.exec_command(
