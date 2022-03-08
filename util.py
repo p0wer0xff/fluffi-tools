@@ -67,8 +67,14 @@ class FaultTolerantSession(requests.Session):
                     return r
                 time.sleep(sleep_time)
                 sleep_time = get_sleep_time(sleep_time)
-            log.error(f"Request for '{url}' failed {REQ_TRIES} times, checking proxy")
+            log.error(
+                f"Request for '{url}' failed {REQ_TRIES} times, checking proxy and restarting fluffiweb"
+            )
             self.fluffi.check_proxy()
+            self.fluffi.ssh_master.exec_command(
+                "cd /srv/fluffi/ && sudo docker-compose restart fluffiweb", check=True
+            )
+            time.sleep(5)
 
 
 class FaultTolerantSSHAndSFTPClient:

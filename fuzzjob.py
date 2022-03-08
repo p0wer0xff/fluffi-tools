@@ -10,13 +10,12 @@ DB_FUZZJOB_FMT = "fluffi_{}"
 DUMP_PATH_FMT = "/srv/fluffi/data/ftp/files/archive/{}.sql.gz"
 ADJUST_AGENTS = False
 MANAGE_AGENTS_INTERVAL = 1 * 60  # 1 minute
-ADJUST_GRE_INTERVAL = 2 * 60  # 2 minutes
 LOAD_HIGH = 15.8
 LOAD_LOW = 14.3
 LOAD_COUNTER_MIN = 6
 GEN_INIT = 2
-RUN_INIT = 10
-EVA_INIT = 10
+RUN_INIT = 15
+EVA_INIT = 15
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -82,33 +81,35 @@ class Fuzzjob:
             self.last_manage_time = time.time()
 
         # Adjust GRE based on load
-        if ADJUST_AGENTS:
-            if (time.time() - self.last_manage_time) > MANAGE_AGENTS_INTERVAL:
-                load = self.f.get_load()
-                if load > LOAD_HIGH:
-                    self.load_high_counter += 1
-                    self.load_low_counter = 0
-                    if self.load_high_counter >= LOAD_COUNTER_MIN:
-                        self.run -= 1
-                        self.eva -= 1
-                        log.warn(f"Decreasing RE agents to {self.run}")
-                        self.set_gre()
-                        self.load_high_counter = 0
-                elif load < LOAD_LOW:
+        if (
+            ADJUST_AGENTS
+            and (time.time() - self.last_manage_time) > MANAGE_AGENTS_INTERVAL
+        ):
+            load = self.f.get_load()
+            if load > LOAD_HIGH:
+                self.load_high_counter += 1
+                self.load_low_counter = 0
+                if self.load_high_counter >= LOAD_COUNTER_MIN:
+                    self.run -= 1
+                    self.eva -= 1
+                    log.warn(f"Decreasing RE agents to {self.run}")
+                    self.set_gre()
                     self.load_high_counter = 0
-                    self.load_low_counter += 1
-                    if self.load_low_counter >= LOAD_COUNTER_MIN:
-                        self.run += 1
-                        self.eva += 1
-                        log.warn(f"Increasing RE agents to {self.run}")
-                        self.set_gre()
-                        self.load_low_counter = 0
-                else:
-                    self.load_high_counter = 0
+            elif load < LOAD_LOW:
+                self.load_high_counter = 0
+                self.load_low_counter += 1
+                if self.load_low_counter >= LOAD_COUNTER_MIN:
+                    self.run += 1
+                    self.eva += 1
+                    log.warn(f"Increasing RE agents to {self.run}")
+                    self.set_gre()
                     self.load_low_counter = 0
             else:
                 self.load_high_counter = 0
                 self.load_low_counter = 0
+        else:
+            self.load_high_counter = 0
+            self.load_low_counter = 0
 
         log.debug(f"Got CPU time of {cpu_time_total / 60:.2f} minutes")
         return cpu_time_total
@@ -116,16 +117,29 @@ class Fuzzjob:
     ### Fluffi Web ###
 
     def archive(self):
-        log.debug(f"Archiving fuzzjob {self.name}...")
-        self.f.s.post(
-            f"{fluffi.FLUFFI_URL}/projects/archive/{self.id}", expect_str="Step 0/4"
-        )
-        time.sleep(1)
         while True:
-            r = self.f.s.get(f"{fluffi.FLUFFI_URL}/progressArchiveFuzzjob")
-            if "5/5" in r.text:
+            log.debug(f"Archiving fuzzjob {self.name}...")
+            self.f.s.post(
+                f"{fluffi.FLUFFI_URL}/projects/archive/{self.id}", expect_str="Step 0/4"
+            )
+            done = False
+            start = time.time()
+            time.sleep(1)
+            while True:
+                self.f.s.get(f"{fluffi.FLUFFI_URL}/progressArchiveFuzzjob")
+                _, stdout, _ = self.f.ssh_master.exec_command(
+                    "ls /srv/fluffi/data/ftp/files/archive/", check=True
+                )
+                if self.name in stdout.read().decode():
+                    done = True
+                    break
+                elif (time.time() - start) > 20:
+                    log.warn(f"Archive for {self.name} taking awhile, trying again")
+                    break
+                time.sleep(util.SLEEP_TIME)
+            if done:
                 break
-            time.sleep(util.SLEEP_TIME)
+        time.sleep(5)
         log.debug(f"Fuzzjob {self.name} archived")
 
     def set_gre(self, down=False):
@@ -188,7 +202,7 @@ class Fuzzjob:
 
         # Load average
         d["load"] = self.f.get_load()
-        if d["load"] > 16:
+        if d["load"] > 17:
             log.warn(f"Load average is at {d['load']}")
 
         # RAM usage
@@ -214,7 +228,7 @@ class Fuzzjob:
         )
         d["ramdisk_used"] = int(stdout.read().decode().strip()[:-1])
         if d["ramdisk_used"] > 70:
-            log.warn(f"RAM disk usage is at {d['disk_used']}%")
+            log.warn(f"RAM disk usage is at {d['ramdisk_used']}%")
 
         log.debug(f"Got stats for {self.name}")
         return d
