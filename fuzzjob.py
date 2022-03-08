@@ -14,9 +14,9 @@ ADJUST_GRE_INTERVAL = 2 * 60  # 2 minutes
 LOAD_HIGH = 15.8
 LOAD_LOW = 14.3
 LOAD_COUNTER_MIN = 6
-GEN_INIT = 4
-RUN_INIT = 11
-EVA_INIT = 11
+GEN_INIT = 2
+RUN_INIT = 10
+EVA_INIT = 10
 
 # Get logger
 log = logging.getLogger("fluffi")
@@ -206,6 +206,15 @@ class Fuzzjob:
         d["disk_used"] = int(stdout.read().decode().strip()[:-1])
         if d["disk_used"] > 70:
             log.warn(f"Disk usage is at {d['disk_used']}%")
+
+        # RAM disk usage
+        _, stdout, _ = self.f.ssh_worker.exec_command(
+            "df /home/fluffi_linux_user/fluffi/ramdisk | tail -n +2 | awk '{ print $5 }'",
+            check=True,
+        )
+        d["ramdisk_used"] = int(stdout.read().decode().strip()[:-1])
+        if d["ramdisk_used"] > 70:
+            log.warn(f"RAM disk usage is at {d['disk_used']}%")
 
         log.debug(f"Got stats for {self.name}")
         return d
