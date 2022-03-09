@@ -147,17 +147,10 @@ class Instance:
     ### SSH ###
 
     def check_proxy(self):
-        # Check if the port is open
-        log.debug("Checking proxy port...")
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(3)
-        try:
-            s.connect((self.master_addr, util.PROXY_PORT))
-            s.close()
-            log.info("Proxy is open")
-            return
-        except Exception as e:
-            log.warn(f"Failed connecting to proxy: {e}")
+        # Kill proxy if it's already there
+        log.debug("Killing proxy...")
+        self.ssh_master.exec_command(f"sudo fuser -k {util.PROXY_PORT}/tcp")
+        log.debug("Killed proxy")
 
         # Start proxy server
         log.debug("Starting proxy...")
@@ -166,7 +159,6 @@ class Instance:
         )
         time.sleep(1)
         log.info(f"Started proxy")
-        self.check_proxy()
 
     def kill_leftover_agents(self):
         log.debug("Killing leftover agents...")
