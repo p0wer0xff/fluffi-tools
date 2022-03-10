@@ -173,7 +173,8 @@ def main():
 
             # Bring down and dump data
             log.info(
-                f"Trial {trial_name} ran {row['completed_testcases']} testcases and took {row['real_time'] // 60} minutes"
+                f"Trial {trial_name} ran {row['completed_testcases']} testcases "
+                f"and took {row['real_time'] // 60} minutes"
             )
             log.info(f"Trial {trial_name} complete, stopping...")
             inst.down()

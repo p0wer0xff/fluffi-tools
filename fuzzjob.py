@@ -38,7 +38,7 @@ class Fuzzjob:
         self.load_high_counter = 0
         self.load_low_counter = 0
 
-    ### SSH ###
+    # --- SSH ---
 
     def get_dump(self, local_path, clean=True):
         log.debug(f"Retrieving dump for fuzzjob {self.name}...")
@@ -54,7 +54,8 @@ class Fuzzjob:
 
         # Get the new PIDs and time
         _, stdout, _ = self.f.ssh_worker.exec_command(
-            f"ps --cumulative -ax | grep {self.f.location} | grep -v grep | awk '{{print $1, $4}}'",
+            f"ps --cumulative -ax | grep {self.f.location} "
+            f"| grep -v grep | awk '{{print $1, $4}}'",
             check=True,
         )
         for match in re.findall(r"(\d+) (\d+):(\d+)", stdout.read().decode()):
@@ -114,7 +115,7 @@ class Fuzzjob:
         log.debug(f"Got CPU time of {cpu_time_total / 60:.2f} minutes")
         return cpu_time_total
 
-    ### Fluffi Web ###
+    # --- Fluffi Web ---
 
     def archive(self):
         while True:
@@ -163,7 +164,7 @@ class Fuzzjob:
         self.last_manage_time = time.time()
         log.debug(f"GRE set to {gen}, {run}, {eva} for {self.name}")
 
-    ### DB ###
+    # --- DB ---
 
     def get_num_testcases(self):
         log.debug(f"Getting number of testcases for {self.name}...")
@@ -173,7 +174,7 @@ class Fuzzjob:
         log.debug(f"Got {testcases} testcases for {self.name}")
         return testcases
 
-    ### Data Collection ###
+    # --- Data Collection ---
 
     def get_stats(self):
         log.debug(f"Getting stats for {self.name}...")
@@ -223,7 +224,8 @@ class Fuzzjob:
 
         # RAM disk usage
         _, stdout, _ = self.f.ssh_worker.exec_command(
-            "df /home/fluffi_linux_user/fluffi/ramdisk | tail -n +2 | awk '{ print $5 }'",
+            "df /home/fluffi_linux_user/fluffi/ramdisk "
+            "| tail -n +2 | awk '{ print $5 }'",
             check=True,
         )
         d["ramdisk_used"] = int(stdout.read().decode().strip()[:-1])

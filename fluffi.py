@@ -1,6 +1,5 @@
 import logging
 import os
-import socket
 import subprocess
 import time
 
@@ -54,7 +53,7 @@ class Instance:
         self.s = util.FaultTolerantSession(self)
         self.s.get(FLUFFI_URL)
 
-    ### High Level Functionality ###
+    # --- High Level Functionality ---
 
     def deploy(self, clean=True):
         log.debug("Deploying...")
@@ -144,7 +143,7 @@ class Instance:
         self.deploy()
         self.up(name_prefix, target_path, module, seeds, library_path)
 
-    ### SSH ###
+    # --- SSH ---
 
     def check_proxy(self):
         # Kill proxy if it's already there
@@ -158,7 +157,7 @@ class Instance:
             f"ssh localhost -D 0.0.0.0:{util.PROXY_PORT} -N -f", check=True
         )
         time.sleep(1)
-        log.info(f"Started proxy")
+        log.info("Started proxy")
 
     def kill_leftover_agents(self):
         log.debug("Killing leftover agents...")
@@ -168,7 +167,8 @@ class Instance:
     def clear_dirs(self):
         log.debug("Deleting log/testcase directories...")
         self.ssh_worker.exec_command(
-            f"sudo rm -rf /var/log/*.gz {os.path.join(FLUFFI_ARCH_DIR, 'logs/')} {os.path.join(FLUFFI_ARCH_DIR, 'testcaseFiles/')}"
+            f"sudo rm -rf /var/log/*.gz {os.path.join(FLUFFI_ARCH_DIR, 'logs/')} "
+            f"{os.path.join(FLUFFI_ARCH_DIR, 'testcaseFiles/')}"
         )
         log.debug("Log/testcase directories deleted")
 
@@ -183,7 +183,7 @@ class Instance:
         )
         return float(stdout.read().decode().strip())
 
-    ### Fluffi Web ###
+    # --- Fluffi Web ---
 
     def new_fuzzjob(
         self,
@@ -200,7 +200,10 @@ class Instance:
         # Set command line
         cmd = os.path.join(SUT_PATH, target_path)
         if library_path is not None and linker_path is not None:
-            cmd = f"{os.path.join(SUT_PATH, linker_path)} --library-path {os.path.join(SUT_PATH, library_path)} {cmd}"
+            cmd = (
+                f"{os.path.join(SUT_PATH, linker_path)} --library-path "
+                f"{os.path.join(SUT_PATH, library_path)} {cmd}"
+            )
 
         # Create fuzzjob with seeds
         data = [
@@ -265,7 +268,7 @@ class Instance:
         self.manage_agents()
         log.debug(f"LM set to {num}")
 
-    ### Polemarch ###
+    # --- Polemarch ---
 
     def manage_agents(self):
         log.debug("Starting manage agents task...")
@@ -284,7 +287,7 @@ class Instance:
             time.sleep(util.SLEEP_TIME)
         log.debug("Manage agents success")
 
-    ### DB ###
+    # --- DB ---
 
     def get_fuzzjobs(self):
         log.debug("Fetching fuzzjobs...")

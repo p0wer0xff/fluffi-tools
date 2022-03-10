@@ -68,7 +68,8 @@ class FaultTolerantSession(requests.Session):
                 time.sleep(sleep_time)
                 sleep_time = get_sleep_time(sleep_time)
             log.error(
-                f"Request for '{url}' failed {REQ_TRIES} times, checking proxy and restarting fluffiweb"
+                f"Request for '{url}' failed {REQ_TRIES} times, "
+                "checking proxy and restarting fluffiweb"
             )
             self.fluffi.check_proxy()
             self.fluffi.ssh_master.exec_command(
@@ -143,7 +144,8 @@ class FaultTolerantSSHAndSFTPClient:
             else:
                 if check and stdout.channel.recv_exit_status() != 0:
                     log.error(
-                        f"Error executing {self.hostname} SSH command '{args[0]}': {stderr.read()}"
+                        f"Error executing {self.hostname} SSH command "
+                        f"'{args[0]}': {stderr.read()}"
                     )
                 else:
                     return stdin, stdout, stderr
