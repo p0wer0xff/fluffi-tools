@@ -138,7 +138,7 @@ class Instance:
         self.clear_dirs()
         log.debug("Stopped")
 
-    def all(self, name_prefix, target_path, module, seeds, library_path=None):
+    def do_all(self, name_prefix, target_path, module, seeds, library_path=None):
         self.down()
         self.deploy()
         self.up(name_prefix, target_path, module, seeds, library_path)
@@ -252,7 +252,7 @@ class Instance:
             while fuzzjob.get_num_testcases() < len(seeds):
                 time.sleep(5)
 
-        log.debug(f"Fuzzjob named {name} created with ID {fuzzjob.id}")
+        log.debug(f"Fuzzjob named {name} created with ID {fuzzjob.key}")
         return fuzzjob
 
     def set_lm(self, num):
@@ -293,8 +293,8 @@ class Instance:
         log.debug("Fetching fuzzjobs...")
         rows = self.db.query_all("SELECT ID, name FROM fuzzjob", DB_NAME)
         fuzzjobs = []
-        for id, name in rows:
-            log.debug(f"Found fuzzjob with ID {id} and name {name}")
-            fuzzjobs.append(Fuzzjob(self, id, name))
+        for key, name in rows:
+            log.debug(f"Found fuzzjob with ID {key} and name {name}")
+            fuzzjobs.append(Fuzzjob(self, key, name))
         log.debug("Fuzzjobs fetched")
         return fuzzjobs

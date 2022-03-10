@@ -70,9 +70,9 @@ def main():
     elif args.command == "all":
         if args.n is None:
             for i in range(N_MIN, N_MAX + 1):
-                fluffi.Instance(i).all(*up_args)
+                fluffi.Instance(i).do_all(*up_args)
         else:
-            fluffi.Instance(args.n).all(*up_args)
+            fluffi.Instance(args.n).do_all(*up_args)
     else:
         print("Invalid command")
         exit(1)

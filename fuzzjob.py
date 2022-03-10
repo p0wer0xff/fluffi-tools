@@ -22,9 +22,9 @@ log = logging.getLogger("fluffi")
 
 
 class Fuzzjob:
-    def __init__(self, f, id, name):
+    def __init__(self, f, key, name):
         self.f = f
-        self.id = id
+        self.key = key
         self.name = name
         self.db_name = DB_FUZZJOB_FMT.format(self.name)
         self.dump_path = DUMP_PATH_FMT.format(self.db_name)
@@ -121,7 +121,8 @@ class Fuzzjob:
         while True:
             log.debug(f"Archiving fuzzjob {self.name}...")
             self.f.s.post(
-                f"{fluffi.FLUFFI_URL}/projects/archive/{self.id}", expect_str="Step 0/4"
+                f"{fluffi.FLUFFI_URL}/projects/archive/{self.key}",
+                expect_str="Step 0/4",
             )
             done = False
             start = time.time()
@@ -182,7 +183,7 @@ class Fuzzjob:
 
         # Fluffi web metrics
         r = self.f.s.get(
-            f"{fluffi.FLUFFI_URL}/projects/view/{self.id}",
+            f"{fluffi.FLUFFI_URL}/projects/view/{self.key}",
             expect_str="General Information",
         )
         matches = re.findall(r'<td style="text-align: center;">(.+)</td>', r.text)
