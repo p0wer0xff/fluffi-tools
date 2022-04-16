@@ -15,24 +15,24 @@ LOCATIONS = [
 RUN1_DIR = os.path.join(experiment.EXP_BASE_DIR, "run1/")
 RUN2_DIR = os.path.join(experiment.EXP_BASE_DIR, "run2/")
 RUN1_NAMES = {
-    "1021-5": "fluffi+no_ps",
-    "1021-6": "fluffi+ps",
-    "1021-7": "rr+no_ps",
-    "1021-8": "rr+ps",
+    "1021-5": "Constant / FLUFFI",
+    "1021-6": "FAST / FLUFFI",
+    "1021-7": "Constant / Round-Robin",
+    "1021-8": "FAST / Round-Robin",
 }
 RUN2_NAMES = {
-    "1021-5": "aflfast+no_ps",
-    "1021-6": "aflfast+ps",
-    "1021-7": "aflfast+no_ps",
-    "1021-8": "aflfast+ps",
+    "1021-5": "Constant / AFLFast",
+    "1021-6": "FAST / AFLFast",
+    "1021-7": "Constant / AFLFast",
+    "1021-8": "FAST / AFLFast",
 }
 EXPERIMENTS = [
-    "fluffi+no_ps",
-    "fluffi+ps",
-    "rr+no_ps",
-    "rr+ps",
-    "aflfast+no_ps",
-    "aflfast+ps",
+    "Constant / FLUFFI",
+    "FAST / FLUFFI",
+    "Constant / Round-Robin",
+    "FAST / Round-Robin",
+    "Constant / AFLFast",
+    "FAST / AFLFast",
 ]
 
 
