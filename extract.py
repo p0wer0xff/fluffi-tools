@@ -77,7 +77,6 @@ def main():
     # Export measurements
     df = pd.concat(measurements, ignore_index=True)
     df = df.loc[df["cpu_time"] <= experiment.TRIAL_TIME]
-    df["cpu_time_round"] = df["cpu_time"].round(-3)
     df.to_parquet(os.path.join(DATA_DIR, "measurements.parquet"))
 
     # Export covered blocks
