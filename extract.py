@@ -8,7 +8,7 @@ import experiment
 import fluffi
 
 # Constants
-DATA_DIR = os.path.expanduser("~/fluffi-tools/data/")
+PROCESS_SQL = False
 LOCATIONS = [
     fluffi.LOCATION_FMT.format(n) for n in range(experiment.N_MIN, experiment.N_MAX + 1)
 ]
@@ -43,9 +43,6 @@ def main():
     paths = []
     crashes = []
 
-    # Create data directory
-    os.makedirs(DATA_DIR, exist_ok=True)
-
     # Iterate over locations
     for location in LOCATIONS:
         location1_dir = os.path.join(RUN1_DIR, location)
@@ -77,19 +74,20 @@ def main():
     # Export measurements
     df = pd.concat(measurements, ignore_index=True)
     df = df.loc[df["cpu_time"] <= experiment.TRIAL_TIME]
-    df.to_parquet(os.path.join(DATA_DIR, "measurements.parquet"))
+    df.to_parquet("measurements.parquet")
 
-    # Export covered blocks
-    df = pd.concat(covered_blocks, ignore_index=True)
-    df.to_parquet(os.path.join(DATA_DIR, "covered_blocks.parquet"))
+    if PROCESS_SQL:
+        # Export covered blocks
+        df = pd.concat(covered_blocks, ignore_index=True)
+        df.to_parquet("covered_blocks.parquet")
 
-    # Export paths
-    df = pd.concat(paths, ignore_index=True)
-    df.to_parquet(os.path.join(DATA_DIR, "paths.parquet"))
+        # Export paths
+        df = pd.concat(paths, ignore_index=True)
+        df.to_parquet("paths.parquet")
 
-    # Export crashes
-    df = pd.concat(crashes, ignore_index=True)
-    df.to_parquet(os.path.join(DATA_DIR, "crashes.parquet"))
+        # Export crashes
+        df = pd.concat(crashes, ignore_index=True)
+        df.to_parquet("crashes.parquet")
 
 
 # Processes each benchmark
@@ -111,7 +109,7 @@ def process(
             trial += 10
 
         # Read from SQL
-        if filename.endswith(".sql.gz"):
+        if filename.endswith(".sql.gz") and PROCESS_SQL:
 
             # Decompress the file
             with gzip.open(file_path, "rb") as f:
