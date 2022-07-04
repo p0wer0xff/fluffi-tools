@@ -218,7 +218,7 @@ class Instance:
             ("evaluatorTypes", (None, 100)),  # CoverageEvaluator
             ("location", (None, self.location)),
             ("targetCMDLine", (None, cmd)),
-            ("option_module", (None, "hangeTimeout")),
+            ("option_module", (None, "hangTimeout")),
             ("option_module_value", (None, 5000)),
             ("targetModulesOnCreate", module),
             ("targetFile", (None, "")),
